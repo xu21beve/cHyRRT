@@ -41,12 +41,8 @@
 
 #include "ompl/datastructures/NearestNeighbors.h"
 #include "ompl/geometric/planners/PlannerIncludes.h"
-#include "ompl/base/spaces/TimeStateSpace.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 
-
-using namespace CommonMath; // TODO: get rid of
-using namespace RapidCollisionChecker;
 using namespace std;
 
 namespace ompl
@@ -144,40 +140,28 @@ namespace ompl
                 setup();
             }
 
+
             // void integrateStates(const ompl::control::ODESolver::ODE &kinematics, vector<double> state, vector<double> control, vector<double> *result, double t);
 
             // bool solutionChecker(bool isExtended, vector<vector<double>> state, vector<vector<double>> goalState);
 
-            base::State *flowPropagation(double input_accel, base::State *x_cur, double tFlowMax) const;
+            std::function<base::State*(double input_accel, double input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation;
 
-            void defineModel(std::function<base::State(base::State *, double, double)> *jumpFunc,
-                                                        std::function<base::State(double, base::State *, double)> *flowFunc,
-                                                        std::function<bool(base::State *, base::State *)> collisionFunc,
+            void defineModel(std::function<base::State*(base::State *, double, base::State *)> jumpFunc,
+                                                        std::function<base::State*(double, double, base::State *, double, base::State *)> flowFunc,
                                                         std::function<double(base::State *, base::State *)> distanceFunc);
 
-            // vector<double> generateFlowSet(vector<double> *x_cur, double tFlow, vector<double> control, vector<double> *result);
-
-            base::State *jumpPropagation(base::State *x_cur, double tJump, double u) const;
-
-            bool collisionChecker(base::State *parent, base::State *x_cur);
-
-            /**
-             * Add in lambda functions later: 
-             * std::function<base::State(base::State *x_cur, double tJump, double u)> const *jumpPropagation;
-
-            std::function<bool(base::State *parent, base::State *x_cur)> collisionChecker;
-
-            std::function<double(base::State *parent, base::State *x_cur)> distanceFunc;
-            */
-
-            // std::vector<double> generateJumpSet(vector<double> u, vector<double> x_cur, double tJump);
-
-            std::function<void(const std::vector<double> *state, const std::vector<double> control, State *result)> funDynamics();
-
-            void setCheckSet(const std::function<int> &checkSetFunction());
 
             // const ompl::control::ODESolver::ODE& ODE(const ompl::control::ODESolver::StateType& q, const ompl::control::Control* u, ompl::control::ODESolver::StateType& qdot);
 
+            std::vector<double> motion_to_vector(base::State *state){
+                std::vector<double> motion_vector;
+                for(int i = 0; i < 9; i++) {
+                    motion_vector.push_back(state->as<ompl::base::RealVectorStateSpace::StateType>()->values[i]);
+                }
+                return motion_vector;
+            }
+            
         protected:
             /// \brief Representation of a motion in the search tree
             class Motion
@@ -211,8 +195,39 @@ namespace ompl
                 std::vector<Motion *> children;
             };
 
-            void printMotion(Motion *motion){
-                cout << "x: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   v: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    a: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    tF: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    tJ: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      u: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << endl;
+            bool Xu(double x1, double x2)
+            {
+                if (x1 <= 4.5 && x1 >= 0 && x2 >= 1.0 && x2 <= 1.5)
+                {
+                    return true;
+                }
+                if (x1 <= 0.5 && x1 >= 0 && x2 >= 1.0 && x2 <= 3.0)
+                {
+                    return true;
+                }
+                if (x1 <= 4.5 && x1 >= 0 && x2 >= 2.5 && x2 <= 3.0)
+                {
+                    return true;
+                }
+                return false;
+            }
+
+            void printMotion(Motion *motion)
+            {
+                cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
+            }
+
+            void printState(base::State *motion)
+            {
+                cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
+            }
+
+            void printTree(){
+                std::vector<Motion *> traj;
+                nn_->list(traj);
+                for(Motion *motion : traj){
+                    printMotion(motion);
+                }
             }
 
             base::StateSpacePtr setup_;
@@ -221,6 +236,16 @@ namespace ompl
             /// \brief Pointer to the root of the tree this motion is
             /// contained in.
             const base::State *root{nullptr};
+
+            std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> jumpPropagation;
+
+            std::function<bool(base::State *state)> jumpSet;
+            
+            std::function<bool(base::State *state)> flowSet;
+
+            void init_tree();
+
+            void random_sample(Motion *randomMotion, std::mt19937 gen);
 
             bool checkPriority(base::State *state);
 
@@ -233,15 +258,13 @@ namespace ompl
                 return fabs(x_a - x_b);  // Set to default Pythagorean distance on Euclidean plane
             }
 
+            std::function<double(base::State *state1, base::State *state2)> distanceFunc;
+
             /** \brief State sampler */
             base::StateSamplerPtr sampler_;
 
             /** \brief A nearest-neighbors datastructure containing the tree of motions */
             std::shared_ptr<NearestNeighbors<Motion *>> nn_;
-
-             /** \brief A nearest-neighbors datastructure containing the tree of motions */
-            std::shared_ptr<NearestNeighbors<Motion *>> nn_printing_;
-            std::vector<Motion *> nn_printing_vector_;
 
             /** \brief The fraction of time the goal is picked as the state to expand towards (if such a state is
              * available) */
@@ -258,6 +281,13 @@ namespace ompl
 
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion *lastGoalMotion_{nullptr};
+
+            double maxSteps = 2000;
+            double maxJumps = 80;
+            double maxFlows = 100;
+            double Tm = 0.5;
+            double minStepLength = 1e-06;
+            double flowStepLength = 0.01;
         };
     }
 }
