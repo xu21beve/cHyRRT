@@ -4,16 +4,16 @@
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
 #include <ompl/control/ODESolver.h>
-#include "../hyRRT.h"
-#include <ompl/control/spaces/RealVectorControlSpace.h>
-#include <ompl/base/spaces/RealVectorStateSpace.h>
+#include "include/hyRRT.h"
+#include "ompl/control/spaces/RealVectorControlSpace.h"
+#include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
-#include "../CommonMath/Trajectory.hpp"
-#include "../include/polyFit.h"
+#include "CommonMath/Trajectory.hpp"
+#include "include/polyFit.hpp"
 #include "quartic.cpp"
-#include "../CommonMath/RectPrism.hpp"
-#include "../CommonMath/ConvexObj.hpp"
+#include "CommonMath/RectPrism.hpp"
+#include "CommonMath/ConvexObj.hpp"
 #include <list>
 
 namespace base = ompl::base;
@@ -406,6 +406,8 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
     double tsCollision = 0.0;
     int totalCollisions = 0;
     double totalIntTime = 0.0;
+    unsigned int tFIndex = si_->getStateDimension() - 4;
+    unsigned int tJIndex = si_->getStateDimension() - 3;
 
     while (const base::State *st = pis_.nextStart())
     {
@@ -488,15 +490,15 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                 base::State *new_state = si_->allocState();
 
                 new_state = this->flowPropagation(u1, u2, previous_state, flowStepLength, new_state);
-                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] += flowStepLength;
+                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength;
 
                 push_back_state(propStepStates, new_state);
 
                 std::vector<double> startPoint = motion_to_vector(parent_motion->state);
                 std::vector<double> endPoint = motion_to_vector(new_state);
 
-                double ts = startPoint[6];
-                double tf = endPoint[6];
+                double ts = startPoint[tFIndex];
+                double tf = endPoint[tFIndex];
 
                 Trajectory _traj = polyFit3D(*propStepStates);
 
@@ -559,7 +561,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = collision_point[1];
                     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] = vel_collision_point[0];
                     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = vel_collision_point[1];
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] = trueCollisionResult.collisionTime;
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] = trueCollisionResult.collisionTime;
                     si_->copyState(new_motion->state, new_state); // get collision state
                 }
 
@@ -592,7 +594,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
         jump:
             base::State *new_state = si_->allocState();
             new_state = this->jumpPropagation(new_motion->state, 0, new_state); // changed from previous_state to new_motion->state
-            new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7]++;
+            new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tJIndex]++;
 
             if (!checkBounds(new_state))
             {
@@ -845,7 +847,6 @@ void ompl::geometric::hyRRT::setup()
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
     sc.configurePlannerRange(maxDistance_);
-
     if (!nn_)
         nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
     nn_->setDistanceFunction([this](const Motion *a, const Motion *b)
