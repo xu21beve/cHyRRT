@@ -42,6 +42,7 @@
 #include "ompl/datastructures/NearestNeighbors.h"
 #include "ompl/geometric/planners/PlannerIncludes.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
+#include <any>
 
 using namespace std;
 
@@ -76,57 +77,108 @@ namespace ompl
             using State = pair<base::State, vector<vector<double>>>;
             using kinematics = function<void(const vector<double> *state, vector<double> control, State *result)>;
 
+            // // Function to set functions as parameters
+            // template<typename ReturnType, typename... Args>
+            // void declareParam(const std::string &name, std::function<ReturnType(Args...)> defaultFunc)
+            // {
+            //     std::function<void(const std::function<ReturnType(Args...)>&)> setter = [this, name](const std::function<ReturnType(Args...)> &value)
+            //     {
+            //         this->setParam<ReturnType, Args...>(name, value);
+            //     };
+
+            //     std::function<std::function<ReturnType(Args...)>()> getter = [this, name, defaultFunc]() -> std::function<ReturnType(Args...)>
+            //     {
+            //         return this->getParam<ReturnType, Args...>(name, defaultFunc);
+            //     };
+
+            //     Planner::declareParam(name, this, setter, getter, defaultFunc);
+            // }
+
+            // template<typename ReturnType, typename... Args>
+            // void setParam(const std::string &name, const std::function<ReturnType(Args...)> &value)
+            // {
+            //     std::any_cast<std::function<ReturnType(Args...)>&>(params_[name]) = value;
+            // }
+
+            // template<typename ReturnType, typename... Args>
+            // std::function<ReturnType(Args...)> getParam(const std::string &name, std::function<ReturnType(Args...)> defaultFunc) const
+            // {
+            //     auto it = params_.find(name);
+            //     if (it != params_.end())
+            //     {
+            //         return std::any_cast<std::function<ReturnType(Args...)>>(it->second);
+            //     }
+            //     else
+            //     {
+            //         return defaultFunc;
+            //     }
+            // }
+
             /** \brief Free the memory allocated by this planner */
             void freeMemory();
 
-            /** \brief Set the goal bias
-
-                In the process of randomly selecting states in
-                the state space to attempt to go towards, the
-                algorithm may in fact choose the actual goal state, if
-                it knows it, with some probability. This probability
-                is a real number between 0.0 and 1.0; its value should
-                usually be around 0.05 and should not be too large. It
-                is probably a good idea to use the default value. */
-            void setGoalBias(double goalBias)
+            /** \brief Set the input range the planner is supposed to use. */
+            void setInputRange(std::vector<double> min, std::vector<double> max)
             {
-                goalBias_ = goalBias;
+                minInputValue_ = min;
+                maxInputValue_ = max;
             }
 
-            /** \brief Get the goal bias the planner is using */
-            double getGoalBias() const
+            /** \brief Set the maximum flow time for a given propagation step. */
+            void setTm(double Tm)
             {
-                return goalBias_;
+                Tm_ = Tm;
             }
 
-            /** \brief Return true if the intermediate states generated along motions are to be added to the tree itself
-             */
-            bool getIntermediateStates() const
+            /** \brief Set the flow time for a given integration step, within a flow propagation step. */
+            void setFlowStepLength(double stepLength)
             {
-                return addIntermediateStates_;
+                flowStepLength_ = stepLength;
             }
 
-            /** \brief Specify whether the intermediate states generated along motions are to be added to the tree
-             * itself */
-            void setIntermediateStates(bool addIntermediateStates)
+            /** \brief Set distance tolerance from goal state. */
+            void setGoalTolerance(double tolerance) 
             {
-                addIntermediateStates_ = addIntermediateStates;
+                tolerance_ = tolerance;
             }
 
-            /** \brief Set the range the planner is supposed to use.
-
-                This parameter greatly influences the runtime of the
-                algorithm. It represents the maximum length of a
-                motion to be added in the tree of motions. */
-            void setRange(double distance)
+            bool setJumpSet(std::function<bool(base::State *)> jumpSet)
             {
-                maxDistance_ = distance;
+                jumpSet_ = jumpSet;
             }
 
-            /** \brief Get the range the planner is using */
-            double getRange() const
+            bool setFlowSet(std::function<bool(base::State *)> flowSet)
             {
-                return maxDistance_;
+                flowSet_ = flowSet;
+            }
+
+            void setDistanceFunction(std::function<double(base::State *, base::State *)> function)
+            {
+                distanceFunc_ = function;
+            }
+
+            void setJumpPropagationFunction(std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> function)
+            {
+                jumpPropagation_ = function;
+            }
+
+            void setFlowPropagationFunction(std::function<base::State*(double input_accel, double input, base::State *x_cur, double tFlowMax, base::State *x_new)> function) 
+            {
+                flowPropagation_ = function;
+            }
+
+            /** \brief Set the input sampling mode. See https://github.com/ompl/ompl/blob/main/src/ompl/util/RandomNumbers.h for details on each available mode. */
+            void setInputSamplingMode(std::string mode) // TODO: Add this into input sampling call
+            { 
+               if(mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" && mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" && mode!= "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY") 
+                {
+                    inputSamplingMethod_ = "uniformReal";
+                    OMPL_WARN("Input sampling mode not recognized. Defaulting to uniformReal.");
+                }
+                else
+                {
+                    inputSamplingMethod_ = mode; 
+                }
             }
 
             /** \brief Set a different nearest neighbors datastructure */
@@ -143,13 +195,9 @@ namespace ompl
 
             // void integrateStates(const ompl::control::ODESolver::ODE &kinematics, vector<double> state, vector<double> control, vector<double> *result, double t);
 
-            // bool solutionChecker(bool isExtended, vector<vector<double>> state, vector<vector<double>> goalState);
-
-            std::function<base::State*(double input_accel, double input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation;
-
-            void defineModel(std::function<base::State*(base::State *, double, base::State *)> jumpFunc,
-                                                        std::function<base::State*(double, double, base::State *, double, base::State *)> flowFunc,
-                                                        std::function<double(base::State *, base::State *)> distanceFunc);
+            // void defineModel(std::function<base::State*(base::State *, double, base::State *)> jumpFunc,
+            //                                             std::function<base::State*(double, double, base::State *, double, base::State *)> flowFunc,
+            //                                             std::function<double(base::State *, base::State *)> distanceFunc);
 
 
             // const ompl::control::ODESolver::ODE& ODE(const ompl::control::ODESolver::StateType& q, const ompl::control::Control* u, ompl::control::ODESolver::StateType& qdot);
@@ -171,9 +219,7 @@ namespace ompl
                 Motion() = default;
 
                 /// \brief Constructor that allocates memory for the state
-                Motion(const base::SpaceInformationPtr &si) : state(si->allocState())
-                {
-                }
+                Motion(const base::SpaceInformationPtr &si) : state(si->allocState()) {}
 
                 ~Motion() = default;
 
@@ -183,16 +229,9 @@ namespace ompl
                 /// \brief The parent motion in the exploration tree
                 Motion *parent{nullptr};
 
-                /// \brief Cost of the state
-                base::Cost cost;
-
                 /// \brief Pointer to the root of the tree this motion is
                 /// contained in.
                 const base::State *root{nullptr};
-
-                bool valid{false};
-
-                std::vector<Motion *> children;
             };
 
             bool Xu(double x1, double x2)
@@ -231,21 +270,18 @@ namespace ompl
             }
 
             base::StateSpacePtr setup_;
-            base::State *state_{nullptr};
-            Motion *parent{nullptr};
-            /// \brief Pointer to the root of the tree this motion is
-            /// contained in.
+
+            // /// \brief Pointer to the root of the tree this motion is
+            // /// contained in.
+            // std::map<std::string, std::any> params_;  // Parameter map
+
             const base::State *root{nullptr};
-
-            std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> jumpPropagation;
-
-            std::function<bool(base::State *state)> jumpSet;
-            
-            std::function<bool(base::State *state)> flowSet;
 
             void init_tree();
 
             void random_sample(Motion *randomMotion, std::mt19937 gen);
+
+            // The following are all customizeable parameters, and affects how the cHyRRT generates trajectories
 
             bool checkPriority(base::State *state);
 
@@ -258,36 +294,77 @@ namespace ompl
                 return fabs(x_a - x_b);  // Set to default Pythagorean distance on Euclidean plane
             }
 
-            std::function<double(base::State *state1, base::State *state2)> distanceFunc;
+            void checkAllParametersSet(){
+                if(!jumpPropagation_){
+                    throw ompl::Exception("Jump map not set");
+                }
+                if(!flowPropagation_){
+                    throw ompl::Exception("Flow map not set");
+                }
+                if(!flowSet_){
+                    throw ompl::Exception("Flow set not set");
+                }
+                if(!jumpSet_){
+                    throw ompl::Exception("Jump set not set");
+                }
+                if(!Tm_){
+                    throw ompl::Exception("Max flow propagation time (Tm) no set");
+                }
+                if(maxInputValue_.size() == 0){
+                    throw ompl::Exception("Max input value (maxInputValue) not set");
+                }
+                if(minInputValue_.size() == 0){
+                    throw ompl::Exception("Min input value (minInputValue) not set");
+                }
+                if(maxInputValue_.size()!= minInputValue_.size()){
+                    throw ompl::Exception("Max input value (maxInputValue) and min input value (minInputValue) must be of the same size");
+                }
+                if(!flowStepLength_){
+                    throw ompl::Exception("Flow step length (flowStepLength) not set");
+                }
+            }
 
-            /** \brief State sampler */
-            base::StateSamplerPtr sampler_;
+            /** \brief Compute distance between states, default is Euclidean distance */
+            std::function<double(base::State *state1, base::State *state2)> distanceFunc_;
 
             /** \brief A nearest-neighbors datastructure containing the tree of motions */
             std::shared_ptr<NearestNeighbors<Motion *>> nn_;
 
-            /** \brief The fraction of time the goal is picked as the state to expand towards (if such a state is
-             * available) */
-            double goalBias_{.05};
+            /** \brief The maximum flow time for a given flow propagation step. Must be set by the user */
+            double Tm_;
 
-            /** \brief The maximum length of a motion to be added to a tree */
-            double maxDistance_{0.};
+            /** \brief The distance tolerance from the goal state for a state to be regarded as a valid final state. Default is .1 */
+            double tolerance_{.1};
 
-            /** \brief Flag indicating whether intermediate states are added to the built tree of motions */
-            bool addIntermediateStates_;
+            double minStepLength = 1e-06;
 
-            /** \brief The random number generator */
+            /** \brief The flow time for a given integration step, within a flow propagation step. Must be set by user */
+            double flowStepLength_;
+
+            /** \brief Minimum input value */
+            std::vector<double> minInputValue_;
+
+
+            /** \brief Maximum input value */
+            std::vector<double> maxInputValue_;
+
+            std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> jumpPropagation_;
+
+            /** \brief Function that returns true if a state is in the jump set, and false if not. */
+            std::function<bool(base::State *state)> jumpSet_;
+            
+            /** \brief Function that returns true if a state is in the flow set, and false if not. */
+            std::function<bool(base::State *state)> flowSet_;
+
+            std::function<base::State*(double input_accel, double input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
+
             RNG rng_;
 
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion *lastGoalMotion_{nullptr};
 
-            double maxSteps = 2000;
-            double maxJumps = 80;
-            double maxFlows = 100;
-            double Tm = 0.5;
-            double minStepLength = 1e-06;
-            double flowStepLength = 0.01;
+            /** \brief Name of input sampling method, default is "uniform" */
+            std::string inputSamplingMethod_{"uniform"};
         };
     }
 }

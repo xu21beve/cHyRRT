@@ -20,6 +20,10 @@ namespace base = ompl::base;
 namespace tools = ompl::tools;
 
 using namespace std::chrono;
+    double functionName(double x)
+    {
+        return 2.0;
+    }
 
 ompl::geometric::hyRRT::hyRRT(const base::SpaceInformationPtr &si_)
     : base::Planner(si_, "hyRRT")
@@ -27,6 +31,7 @@ ompl::geometric::hyRRT::hyRRT(const base::SpaceInformationPtr &si_)
     specs_.approximateSolutions = false;
     specs_.directed = true;
 }
+
 
 ompl::geometric::hyRRT::~hyRRT(void)
 {
@@ -77,14 +82,14 @@ bool collisionregion7(double x1, double x2, double v1, double v2)
     return x1 <= 4.5 && x1 >= 4.4 && x2 >= 2.5 && x2 <= 3;
 }
 
-void ompl::geometric::hyRRT::defineModel(std::function<base::State *(base::State *, double, base::State *)> jumpFunc,
-                                         std::function<base::State *(double, double, base::State *, double, base::State *)> flowFunc,
-                                         std::function<double(base::State *, base::State *)> distanceFunc)
-{
-    this->jumpPropagation = jumpFunc;
-    this->flowPropagation = flowFunc;
-    this->distanceFunc = distanceFunc;
-}
+// void ompl::geometric::hyRRT::defineModel(std::function<base::State *(base::State *, double, base::State *)> jumpFunc,
+//                                          std::function<base::State *(double, double, base::State *, double, base::State *)> flowFunc,
+//                                          std::function<double(base::State *, base::State *)> distanceFunc)
+// {
+//     this->jumpPropagation = jumpFunc;
+//     this->flowPropagation = flowFunc;
+//     this->distanceFunc = distanceFunc;
+// }
 
 void ompl::geometric::hyRRT::init_tree()
 {
@@ -390,12 +395,62 @@ void push_back_state(std::vector<std::vector<double>> *states_list, base::State 
     states_list->push_back(new_state);
 }
 
+bool collisionChecker(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex) {
+                Trajectory _traj = polyFit3D(*propStepStates);
+
+                DetailedCollisionResult leftCollisionResult = polyCollisionChecker(ts, tf, leftRectPrism, 1e-03, 0, _traj);
+                DetailedCollisionResult topCollisionResult = polyCollisionChecker(ts, tf, topRectPrism, 1e-03, 0, _traj);
+                DetailedCollisionResult bottomCollisionResult = polyCollisionChecker(ts, tf, bottomRectPrism, 1e-03, 0, _traj);
+
+                DetailedCollisionResult trueCollisionResult;
+                trueCollisionResult.collisionType == NoCollision;
+                bool run = true;
+
+                if (leftCollisionResult.collisionType == Collision)
+                {
+                    trueCollisionResult = leftCollisionResult;
+                }
+                else if (topCollisionResult.collisionType == Collision)
+                {
+                    trueCollisionResult = topCollisionResult;
+                }
+                else if (bottomCollisionResult.collisionType == Collision)
+                {
+                    trueCollisionResult = bottomCollisionResult;
+                }
+                else
+                {
+                    trueCollisionResult.collisionType == NoCollision;
+                    run = false;
+                }
+
+                // No entiendo result below
+                bool collision = run && trueCollisionResult.collisionType == Collision;
+                std::vector<double> collision_point;
+
+                if(collision) {
+                Vec3 collision_point = _traj.GetValue(trueCollisionResult.collisionTime);
+                    std::vector<Vec3> collision_vel_coeffs = _traj.GetDerivativeCoeffs();
+                    collision_vel_coeffs.insert(collision_vel_coeffs.begin(), Vec3(0.0, 0.0, 0.0)); // FIXME: Expensive --- should use std::list instead    Inserts 0.0, 0.0, 0.0 as the fifth degree coefficient bcs only five terms currently
+                    Trajectory _deriv_traj(collision_vel_coeffs, ts, tf);
+                    Vec3 vel_collision_point = _deriv_traj.GetValue(trueCollisionResult.collisionTime);
+
+                    // push back final motion with collision as last point
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = collision_point[0];
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = collision_point[1];
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] = vel_collision_point[0];
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = vel_collision_point[1];
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] = trueCollisionResult.collisionTime;
+                }
+}
+
 base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTerminationCondition &ptc)
 {
     auto start = high_resolution_clock::now();
 
     // make sure the planner is configured correctly; ompl::base::Planner::checkValidity
     // ensures that there is at least one input state and a ompl::base::Goal object specified
+    checkAllParametersSet();
     checkValidity();
 
     base::Goal *goal = pdef_->getGoal().get();
@@ -455,7 +510,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
         int flows = 0;
 
         double random = rand();
-        double randomFlowTimeMax = random / RAND_MAX * Tm;
+        double randomFlowTimeMax = random / RAND_MAX * Tm_;
 
         // Track number of steps, alternative to motion_tree.size()
         int steps = 0;
@@ -484,13 +539,13 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
             while (tFlow < randomFlowTimeMax && !checkPriority(new_motion->state))  // FIXME: Berkeley collision checker resolution is not good enough, so some collisions are not detected
             {
                 collision = false;
-                tFlow += flowStepLength;
+                tFlow += flowStepLength_;
 
                 // Find new state with flow propagation
                 base::State *new_state = si_->allocState();
 
-                new_state = this->flowPropagation(u1, u2, previous_state, flowStepLength, new_state);
-                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength;
+                new_state = this->flowPropagation_(u1, u2, previous_state, flowStepLength_, new_state);
+                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength_;
 
                 push_back_state(propStepStates, new_state);
 
@@ -500,39 +555,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                 double ts = startPoint[tFIndex];
                 double tf = endPoint[tFIndex];
 
-                Trajectory _traj = polyFit3D(*propStepStates);
-
-                DetailedCollisionResult leftCollisionResult = polyCollisionChecker(ts, tf, leftRectPrism, 1e-03, 0, _traj);
-                DetailedCollisionResult topCollisionResult = polyCollisionChecker(ts, tf, topRectPrism, 1e-03, 0, _traj);
-                DetailedCollisionResult bottomCollisionResult = polyCollisionChecker(ts, tf, bottomRectPrism, 1e-03, 0, _traj);
-                i++;
-
-                DetailedCollisionResult trueCollisionResult;
-                trueCollisionResult.collisionType == NoCollision;
-                bool run = true;
-
-                if (leftCollisionResult.collisionType == Collision)
-                {
-                    trueCollisionResult = leftCollisionResult;
-                }
-                else if (topCollisionResult.collisionType == Collision)
-                {
-                    trueCollisionResult = topCollisionResult;
-                }
-                else if (bottomCollisionResult.collisionType == Collision)
-                {
-                    trueCollisionResult = bottomCollisionResult;
-                }
-                else
-                {
-                    trueCollisionResult.collisionType == NoCollision;
-                    run = false;
-                }
-
-                // No entiendo result below
-                collision = run && trueCollisionResult.collisionType == Collision;
-
-                std::vector<double> collision_point;
+                //Place collision checker here
 
                 si_->copyState(previous_state, new_state);
 
@@ -540,6 +563,8 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                 {
                     goto escape;
                 }
+
+                collision = collisionChecker(propStepStates, ts, tf, new_state, tFIndex);
 
                 // If the motion encounters no collision with jump sets, then add the successful motion to the temporary trees
                 if (!collision)
@@ -550,18 +575,6 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                 {
                     totalCollisions++;
                     // set parent motions for next iteration to last motion in tree
-                    Vec3 collision_point = _traj.GetValue(trueCollisionResult.collisionTime);
-                    std::vector<Vec3> collision_vel_coeffs = _traj.GetDerivativeCoeffs();
-                    collision_vel_coeffs.insert(collision_vel_coeffs.begin(), Vec3(0.0, 0.0, 0.0)); // FIXME: Expensive --- should use std::list instead    Inserts 0.0, 0.0, 0.0 as the fifth degree coefficient bcs only five terms currently
-                    Trajectory _deriv_traj(collision_vel_coeffs, ts, tf);
-                    Vec3 vel_collision_point = _deriv_traj.GetValue(trueCollisionResult.collisionTime);
-
-                    // push back final motion with collision as last point
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = collision_point[0];
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = collision_point[1];
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] = vel_collision_point[0];
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = vel_collision_point[1];
-                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] = trueCollisionResult.collisionTime;
                     si_->copyState(new_motion->state, new_state); // get collision state
                 }
 
@@ -593,7 +606,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
             collision_parent_motion = parent_motion;
         jump:
             base::State *new_state = si_->allocState();
-            new_state = this->jumpPropagation(new_motion->state, 0, new_state); // changed from previous_state to new_motion->state
+            new_state = this->jumpPropagation_(new_motion->state, 0, new_state); // changed from previous_state to new_motion->state
             new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tJIndex]++;
 
             if (!checkBounds(new_state))
@@ -648,7 +661,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
 
             // To get the value of duration use the count()
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-            cout << "total duration (microseconds): " << duration.count() << endl;
+            std::cout << "total duration (microseconds): " << duration.count() << endl;
 
             // Return a status indicating that an exact solution has been found
             if (finalDistance > 0.0)
@@ -697,8 +710,9 @@ bool ompl::geometric::hyRRT::checkPriority(base::State *state)
 
     return value;
 } // Random selection if in intersection --- 0 if jump, 1 if flow
-
-base::State *flowPropagation(double u1, double u2, base::State *x_cur, double tFlow, base::State *new_state)
+const base::State *constFlowProp(double u1, double u2, base::State *x_cur, double tFlow, base::State *new_state)
+{}
+base::State *defaultFlowPropagation(double u1, double u2, base::State *x_cur, double tFlow, base::State *new_state)
 {
     // double y_pos = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
     // double acceleration_cur = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
@@ -789,7 +803,7 @@ bool Xu(double x1, double x2)
 //     return value;
 // }
 
-base::State *jumpPropagation(base::State *x_cur, double u, base::State *new_state)
+base::State *defaultJumpPropagation(base::State *x_cur, double u, base::State *new_state)
 {
     double x1 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
     double x2 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
@@ -846,7 +860,6 @@ void ompl::geometric::hyRRT::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
-    sc.configurePlannerRange(maxDistance_);
     if (!nn_)
         nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
     nn_->setDistanceFunction([this](const Motion *a, const Motion *b)
@@ -957,10 +970,18 @@ int main()
     // Set the problem instance for our planner to solve
     cHyRRT.setProblemDefinition(pdef);
     cHyRRT.setup();
-    cHyRRT.defineModel(jumpPropagation, flowPropagation, distanceFunc);
+    // cHyRRT.defineModel(defaultJumpPropagation, defaultFlowPropagation, distanceFunc);
+    cHyRRT.setFlowPropagationFunction(defaultFlowPropagation);
+    cHyRRT.setJumpPropagationFunction(defaultJumpPropagation);
+    cHyRRT.setDistanceFunction(distanceFunc);
+
+    // auto parameters = cHyRRT.params();
+    // std::cout << "Setting your flow propagation function succeeded: " << parameters.setParam("flowPropagation", "defaultFlowPropagation") << std::endl;
+    // std::cout << "Setting your jump propagation function succeeded: " << parameters.setParam("jumpPropagation", "defaultJumpPropagation") << std::endl;
+    // std::cout << "Setting your distance function succeeded: " << parameters.setParam("distanceFunction", "defaultDistance") << std::endl;
 
     // attempt to solve the planning problem within one second of
     // planning time
     base::PlannerStatus solved = cHyRRT.solve(base::timedPlannerTerminationCondition(10000));
-    cout << "solution status: " << solved << endl;
+    std::cout << "solution status: " << solved << endl;
 }
