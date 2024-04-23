@@ -81,6 +81,17 @@ namespace ompl
             /** \brief Set the input range the planner is supposed to use. */
             void setInputRange(std::vector<double> min, std::vector<double> max)
             {
+                if (maxInputValue_.size() != minInputValue_.size())
+                {
+                    throw ompl::Exception("Max input value (maxInputValue) and min input value (minInputValue) must be of the same size");
+                }
+                for (int i = 0; i < maxInputValue_.size(); i++)
+                {
+                    if (maxInputValue_[i] <= minInputValue_[i])
+                    {
+                        throw ompl::Exception("Max input value must be greater than or equal to min input value");
+                    }
+                }
                 minInputValue_ = min;
                 maxInputValue_ = max;
             }
@@ -88,18 +99,44 @@ namespace ompl
             /** \brief Set the maximum flow time for a given propagation step. */
             void setTm(double Tm)
             {
+                if (Tm <= 0)
+                {
+                    throw ompl::Exception("Maximum flow time per propagation step must be greater than 0");
+                }
+                if(!flowStepLength_)
+                {
+                    if(Tm_ < flowStepLength_)
+                    {
+                        throw ompl::Exception("Maximum flow time per propagation step must be greater than or equal to the length of time for each flow integration step (flowStepLength)");
+                    }
+                }
                 Tm_ = Tm;
             }
 
             /** \brief Set the flow time for a given integration step, within a flow propagation step. */
             void setFlowStepLength(double stepLength)
             {
+                if (flowStepLength_ <= 0)
+                {
+                    throw ompl::Exception("Flow step length must be greater than 0");
+                }
+                if(!Tm_)
+                {
+                    if(Tm_ < flowStepLength_)
+                    {
+                        throw ompl::Exception("Flow step length must be less than or equal to the maximum flow time per propagation step (Tm)");
+                    }
+                }
                 flowStepLength_ = stepLength;
             }
 
             /** \brief Set distance tolerance from goal state. */
-            void setGoalTolerance(double tolerance) 
+            void setGoalTolerance(double tolerance)
             {
+                if (tolerance < 0)
+                {
+                    throw ompl::Exception("Goal tolerance must be greater than or equal to 0");
+                }
                 tolerance_ = tolerance;
             }
 
@@ -118,32 +155,32 @@ namespace ompl
                 distanceFunc_ = function;
             }
 
-            void setJumpPropagationFunction(std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> function)
+            void setJumpPropagationFunction(std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> function)
             {
                 jumpPropagation_ = function;
             }
 
-            void setFlowPropagationFunction(std::function<base::State*(std::vector<double> inputs, base::State *x_cur, double tFlowMax, base::State *x_new)> function) 
+            void setFlowPropagationFunction(std::function<base::State *(std::vector<double> inputs, base::State *x_cur, double tFlowMax, base::State *x_new)> function)
             {
                 flowPropagation_ = function;
             }
 
-            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex)> function) 
+            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex)> function)
             {
                 collisionChecker_ = function;
             }
 
             /** \brief Set the input sampling mode. See https://github.com/ompl/ompl/blob/main/src/ompl/util/RandomNumbers.h for details on each available mode. */
             void setInputSamplingMode(std::string mode) // TODO: Add this into input sampling call
-            { 
-               if(mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" && mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" && mode!= "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY") 
+            {
+                if (mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" && mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" && mode != "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY")
                 {
                     inputSamplingMethod_ = "uniformReal";
                     OMPL_WARN("Input sampling mode not recognized. Defaulting to uniformReal.");
                 }
                 else
                 {
-                    inputSamplingMethod_ = mode; 
+                    inputSamplingMethod_ = mode;
                 }
             }
 
@@ -158,21 +195,52 @@ namespace ompl
                 setup();
             }
 
-            std::function<base::State*(double input_accel, double input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation;
-
-            void defineModel(std::function<base::State*(base::State *, double, base::State *)> jumpFunc,
-                                                        std::function<base::State*(double, double, base::State *, double, base::State *)> flowFunc,
-                                                        std::function<double(base::State *, base::State *)> distanceFunc);
-
-
-            std::vector<double> motion_to_vector(base::State *state){
+            std::vector<double> motion_to_vector(base::State *state)
+            {
                 std::vector<double> motion_vector;
-                for(int i = 0; i < 9; i++) {
+                for (int i = 0; i < 9; i++)
+                {
                     motion_vector.push_back(state->as<ompl::base::RealVectorStateSpace::StateType>()->values[i]);
                 }
                 return motion_vector;
             }
-            
+
+            void checkAllParametersSet()
+            {
+                if (!jumpPropagation_)
+                {
+                    throw ompl::Exception("Jump map not set");
+                }
+                if (!flowPropagation_)
+                {
+                    throw ompl::Exception("Flow map not set");
+                }
+                if (!flowSet_)
+                {
+                    throw ompl::Exception("Flow set not set");
+                }
+                if (!jumpSet_)
+                {
+                    throw ompl::Exception("Jump set not set");
+                }
+                if (!Tm_)
+                {
+                    throw ompl::Exception("Max flow propagation time (Tm) no set");
+                }
+                if (maxInputValue_.size() == 0)
+                {
+                    throw ompl::Exception("Max input value (maxInputValue) not set");
+                }
+                if (minInputValue_.size() == 0)
+                {
+                    throw ompl::Exception("Min input value (minInputValue) not set");
+                }
+                if (!flowStepLength_)
+                {
+                    throw ompl::Exception("Flow step length (flowStepLength) not set");
+                }
+            }
+
         protected:
             /// \brief Representation of a motion in the search tree
             class Motion
@@ -207,21 +275,17 @@ namespace ompl
                 cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
             }
 
-            void printTree(){
+            void printTree()
+            {
                 std::vector<Motion *> traj;
                 nn_->list(traj);
-                for(Motion *motion : traj){
+                for (Motion *motion : traj)
+                {
                     printMotion(motion);
                 }
             }
 
             base::StateSpacePtr setup_;
-
-            std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> jumpPropagation;
-
-            std::function<bool(base::State *state)> jumpSet;
-            
-            std::function<bool(base::State *state)> flowSet;
 
             void init_tree();
 
@@ -236,7 +300,7 @@ namespace ompl
             {
                 double x_a = a->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
                 double x_b = b->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
-                return fabs(x_a - x_b);  // Set to default Pythagorean distance on Euclidean plane
+                return fabs(x_a - x_b); // Set to default Pythagorean distance on Euclidean plane
             }
 
             std::function<double(base::State *state1, base::State *state2)> distanceFunc;
@@ -267,33 +331,26 @@ namespace ompl
             /** \brief Max distance, need to remove */
             double maxDistance_{0.};
 
-            std::function<base::State*(base::State *x_cur, double u, base::State *x_new)> jumpPropagation_;
+            std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> jumpPropagation_;
 
             /** \brief Function that returns true if a state is in the jump set, and false if not. */
             std::function<bool(base::State *state)> jumpSet_;
-            
+
             /** \brief Function that returns true if a state is in the flow set, and false if not. */
             std::function<bool(base::State *state)> flowSet_;
 
-            std::function<base::State*(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
+            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
 
             RNG rng_;
 
             /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
             std::function<bool(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_;
-            
+
             /** \brief Name of input sampling method, default is "uniform" */
             std::string inputSamplingMethod_{"uniform"};
 
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion *lastGoalMotion_{nullptr};
-
-            double maxSteps = 2000;
-            double maxJumps = 80;
-            double maxFlows = 100;
-            double Tm = 0.5;
-            // double minStepLength = 1e-06;
-            double flowStepLength = 0.01;
         };
     }
 }

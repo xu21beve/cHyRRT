@@ -82,6 +82,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
     // make sure the planner is configured correctly; ompl::base::Planner::checkValidity
     // ensures that there is at least one input state and a ompl::base::Goal object specified
     checkValidity();
+    checkAllParametersSet();
 
     base::Goal *goal = pdef_->getGoal().get();
 
