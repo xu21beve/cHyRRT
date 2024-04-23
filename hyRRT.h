@@ -103,9 +103,9 @@ namespace ompl
                 {
                     throw ompl::Exception("Maximum flow time per propagation step must be greater than 0");
                 }
-                if(!flowStepLength_)
+                if (!flowStepLength_)
                 {
-                    if(Tm_ < flowStepLength_)
+                    if (Tm_ < flowStepLength_)
                     {
                         throw ompl::Exception("Maximum flow time per propagation step must be greater than or equal to the length of time for each flow integration step (flowStepLength)");
                     }
@@ -120,9 +120,9 @@ namespace ompl
                 {
                     throw ompl::Exception("Flow step length must be greater than 0");
                 }
-                if(!Tm_)
+                if (!Tm_)
                 {
-                    if(Tm_ < flowStepLength_)
+                    if (Tm_ < flowStepLength_)
                     {
                         throw ompl::Exception("Flow step length must be less than or equal to the maximum flow time per propagation step (Tm)");
                     }
@@ -165,7 +165,7 @@ namespace ompl
                 flowPropagation_ = function;
             }
 
-            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex)> function)
+            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> function)
             {
                 collisionChecker_ = function;
             }
@@ -344,7 +344,26 @@ namespace ompl
             RNG rng_;
 
             /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
-            std::function<bool(std::vector<std::vector<double>> *propStepStates, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_;
+            std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_ = 
+                [this](std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex) -> bool {
+                    base::State *previous_temp = si_->allocState();
+                    base::State *temp = si_->allocState();
+                    for (int i = 0; i < propStepStates->size(); i++){
+                        for(int j = 0; j < propStepStates->at(i).size(); j++){
+                            temp->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = propStepStates->at(i).at(j);
+                        }
+                        if (obstacleSet(temp)){
+                            if (i == 0)
+                                si_->copyState(new_state, temp);
+                            else 
+                                si_->copyState(new_state, previous_temp);
+                            return true;
+                        }
+                        si_->copyState(previous_temp, temp);
+                    }
+                    return false;
+            };
+
 
             /** \brief Name of input sampling method, default is "uniform" */
             std::string inputSamplingMethod_{"uniform"};

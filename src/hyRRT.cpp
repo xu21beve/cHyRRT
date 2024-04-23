@@ -192,7 +192,7 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
                     goto escape;
                 }
 
-                collision = collisionChecker_(propStepStates, ts, tf, new_state, tFIndex);
+                collision = collisionChecker_(propStepStates, jumpSet_, ts, tf, new_state, tFIndex);
 
                 // If the motion encounters no collision with jump sets, then add the successful motion to the temporary trees
                 if (!collision)
