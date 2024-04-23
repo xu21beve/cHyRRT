@@ -361,6 +361,11 @@ bool flowSet(ompl::base::State *state)
     return !jumpSet(state);
 }
 
+bool unsafeSet(ompl::base::State *state)
+{
+    return false;
+}
+
 ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State *x_cur, double tFlow, ompl::base::State *new_state)
 {
     double x1 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
@@ -439,7 +444,7 @@ ompl::base::State *jumpPropagation(ompl::base::State *x_cur, double u, ompl::bas
     return new_state;
 }
 
-bool collisionChecker(std::vector<std::vector<double>> *propStepStates, double ts, double tf, ompl::base::State *new_state, int tFIndex)
+bool collisionChecker(std::vector<std::vector<double>> *propStepStates, std::function<bool(ompl::base::State *state)> obstacleSet, double ts, double tf, ompl::base::State *new_state, int tFIndex)
 {
     Trajectory _traj = polyFit3D(*propStepStates);
 
@@ -554,7 +559,8 @@ int main()
     cHyRRT.setTm(0.5);
     cHyRRT.setFlowStepLength(0.01);
     cHyRRT.setInputRange(std::vector<double>{-0.5, 1}, std::vector<double>{-1, 1});
-    cHyRRT.setCollisionChecker(collisionChecker);
+    cHyRRT.setUnsafeSet(unsafeSet);
+    // cHyRRT.setCollisionChecker(collisionChecker);
 
     // attempt to solve the planning problem within one second of
     // planning time

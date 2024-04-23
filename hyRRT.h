@@ -150,6 +150,11 @@ namespace ompl
                 flowSet_ = flowSet;
             }
 
+            void setUnsafeSet(std::function<bool(base::State *)> unsafeSet)
+            {
+                unsafeSet_ = unsafeSet;
+            }
+
             void setDistanceFunction(std::function<double(base::State *, base::State *)> function)
             {
                 distanceFunc_ = function;
@@ -222,6 +227,10 @@ namespace ompl
                 if (!jumpSet_)
                 {
                     throw ompl::Exception("Jump set not set");
+                }
+                if (!unsafeSet_)
+                {
+                    throw ompl::Exception("Unsafe set not set");
                 }
                 if (!Tm_)
                 {
@@ -338,6 +347,9 @@ namespace ompl
 
             /** \brief Function that returns true if a state is in the flow set, and false if not. */
             std::function<bool(base::State *state)> flowSet_;
+
+            /** \brief Function that returns true if a state is in the flow set, and false if not. */
+            std::function<bool(base::State *state)> unsafeSet_;
 
             std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
 
