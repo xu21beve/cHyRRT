@@ -274,13 +274,16 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
 
             // Create a new path object to store the solution path
             auto path(std::make_shared<PathGeometric>(si_));
+            trajectoryMatrix_ = {};
 
             // Reserve space for the path states
             path->getStates().reserve(mpath.size());
 
             // Add the states to the path in reverse order (from start to goal)
-            for (int i = mpath.size() - 1; i >= 0; --i)
+            for (int i = mpath.size() - 1; i >= 0; --i) {
                 path->append(mpath[i]->state);
+                trajectoryMatrix_.push_back(mpath[i]);
+            }
 
             // Add the solution path to the problem definition
             pdef_->addSolutionPath(path, finalDistance > 0.0, finalDistance, getName());

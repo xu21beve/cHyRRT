@@ -43,6 +43,10 @@
 #include "ompl/geometric/planners/PlannerIncludes.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <any>
+#include <ompl/base/Planner.h>
+#include <ompl/tools/config/SelfConfig.h>
+#include <ompl/base/GoalTypes.h>
+#include <ompl/control/ODESolver.h>
 
 using namespace std;
 
@@ -74,6 +78,34 @@ namespace ompl
             void setup() override;
             void getPlannerData(base::PlannerData &data) const override;
             base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
+
+            /// \brief Representation of a motion in the search tree
+            class Motion
+            {
+            public:
+                /// \brief Default constructor
+                Motion() = default;
+
+                /// \brief Constructor that allocates memory for the state
+                Motion(const base::SpaceInformationPtr &si) : state(si->allocState()) {}
+
+                ~Motion() = default;
+
+                /// \brief The state contained by the motion
+                base::State *state{nullptr};
+
+                /// \brief The parent motion in the exploration tree
+                Motion *parent{nullptr};
+
+                /// \brief Pointer to the root of the tree this motion is
+                /// contained in.
+                const base::State *root{nullptr};
+            };
+
+            /** \brief Get trajectory matrix from trajectoryMatrix_*/
+            std::vector<Motion *> getTrajectoryMatrix() {
+                return trajectoryMatrix_;
+            }
 
             /** \brief Free the memory allocated by this planner */
             void freeMemory();
@@ -251,28 +283,6 @@ namespace ompl
             }
 
         protected:
-            /// \brief Representation of a motion in the search tree
-            class Motion
-            {
-            public:
-                /// \brief Default constructor
-                Motion() = default;
-
-                /// \brief Constructor that allocates memory for the state
-                Motion(const base::SpaceInformationPtr &si) : state(si->allocState()) {}
-
-                ~Motion() = default;
-
-                /// \brief The state contained by the motion
-                base::State *state{nullptr};
-
-                /// \brief The parent motion in the exploration tree
-                Motion *parent{nullptr};
-
-                /// \brief Pointer to the root of the tree this motion is
-                /// contained in.
-                const base::State *root{nullptr};
-            };
 
             void printMotion(Motion *motion)
             {
@@ -311,6 +321,8 @@ namespace ompl
                 double x_b = b->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
                 return fabs(x_a - x_b); // Set to default Pythagorean distance on Euclidean plane
             }
+
+            std::vector<Motion *> trajectoryMatrix_{nullptr};
 
             std::function<double(base::State *state1, base::State *state2)> distanceFunc;
 
