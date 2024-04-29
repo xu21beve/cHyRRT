@@ -55,7 +55,7 @@ namespace ompl
     namespace geometric
     {
         /**
-           @anchor hyRRT
+           @anchor HyRRT
            @par Short description
            RRT is a tree-based motion planner that uses the following
            idea: RRT samples a random state @b qr in the state space,
@@ -68,12 +68,12 @@ namespace ompl
         */
 
         /** \brief Hybrid Rapidly-exploring Random Trees */
-        class hyRRT : public base::Planner
+        class HyRRT : public base::Planner
         {
         public:
             /** \brief Constructor */
-            hyRRT(const base::SpaceInformationPtr &si);
-            ~hyRRT() override;
+            HyRRT(const base::SpaceInformationPtr &si);
+            ~HyRRT() override;
             void clear() override;
             void setup() override;
             void getPlannerData(base::PlannerData &data) const override;
@@ -87,7 +87,9 @@ namespace ompl
                 Motion() = default;
 
                 /// \brief Constructor that allocates memory for the state
-                Motion(const base::SpaceInformationPtr &si) : state(si->allocState()) {}
+                Motion(const base::SpaceInformationPtr &si) : state(si->allocState())
+                {
+                }
 
                 ~Motion() = default;
 
@@ -103,7 +105,8 @@ namespace ompl
             };
 
             /** \brief Get trajectory matrix from trajectoryMatrix_*/
-            std::vector<Motion *> getTrajectoryMatrix() {
+            std::vector<Motion *> getTrajectoryMatrix()
+            {
                 return trajectoryMatrix_;
             }
 
@@ -115,7 +118,8 @@ namespace ompl
             {
                 if (maxInputValue_.size() != minInputValue_.size())
                 {
-                    throw ompl::Exception("Max input value (maxInputValue) and min input value (minInputValue) must be of the same size");
+                    throw ompl::Exception("Max input value (maxInputValue) and min input value (minInputValue) must be "
+                                          "of the same size");
                 }
                 for (int i = 0; i < maxInputValue_.size(); i++)
                 {
@@ -139,7 +143,8 @@ namespace ompl
                 {
                     if (Tm_ < flowStepLength_)
                     {
-                        throw ompl::Exception("Maximum flow time per propagation step must be greater than or equal to the length of time for each flow integration step (flowStepLength)");
+                        throw ompl::Exception("Maximum flow time per propagation step must be greater than or equal to "
+                                              "the length of time for each flow integration step (flowStepLength)");
                     }
                 }
                 Tm_ = Tm;
@@ -156,7 +161,8 @@ namespace ompl
                 {
                     if (Tm_ < flowStepLength_)
                     {
-                        throw ompl::Exception("Flow step length must be less than or equal to the maximum flow time per propagation step (Tm)");
+                        throw ompl::Exception("Flow step length must be less than or equal to the maximum flow time "
+                                              "per propagation step (Tm)");
                     }
                 }
                 flowStepLength_ = stepLength;
@@ -192,25 +198,35 @@ namespace ompl
                 distanceFunc_ = function;
             }
 
-            void setJumpPropagationFunction(std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> function)
+            void setJumpPropagationFunction(
+                std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> function)
             {
                 jumpPropagation_ = function;
             }
 
-            void setFlowPropagationFunction(std::function<base::State *(std::vector<double> inputs, base::State *x_cur, double tFlowMax, base::State *x_new)> function)
+            void setFlowPropagationFunction(std::function<base::State *(std::vector<double> inputs, base::State *x_cur,
+                                                                        double tFlowMax, base::State *x_new)>
+                                                function)
             {
                 flowPropagation_ = function;
             }
 
-            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> function)
+            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates,
+                                                        std::function<bool(base::State *state)> obstacleSet, double ts,
+                                                        double tf, base::State *new_state, int tFIndex)>
+                                         function)
             {
                 collisionChecker_ = function;
             }
 
-            /** \brief Set the input sampling mode. See https://github.com/ompl/ompl/blob/main/src/ompl/util/RandomNumbers.h for details on each available mode. */
-            void setInputSamplingMode(std::string mode) // TODO: Add this into input sampling call
+            /** \brief Set the input sampling mode. See
+             * https://github.com/ompl/ompl/blob/main/src/ompl/util/RandomNumbers.h for details on each available mode.
+             */
+            void setInputSamplingMode(std::string mode)  // TODO: Add this into input sampling call
             {
-                if (mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" && mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" && mode != "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY")
+                if (mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" &&
+                    mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" &&
+                    mode != "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY")
                 {
                     inputSamplingMethod_ = "uniformReal";
                     OMPL_WARN("Input sampling mode not recognized. Defaulting to uniformReal.");
@@ -283,15 +299,27 @@ namespace ompl
             }
 
         protected:
-
             void printMotion(Motion *motion)
             {
-                cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
+                cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   v "
+                     << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1]
+                     << "    a: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2]
+                     << "    tf: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3]
+                     << "    tj: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4]
+                     << endl;
             }
 
             void printState(base::State *motion)
             {
-                cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
+                // cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " <<
+                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
             }
 
             void printTree()
@@ -314,17 +342,7 @@ namespace ompl
 
             bool checkPriority(base::State *state);
 
-            /** \brief Compute distance between motions (actually distance between contained states) */
-            double distanceFunction(const Motion *a, const Motion *b) const
-            {
-                double x_a = a->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
-                double x_b = b->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
-                return fabs(x_a - x_b); // Set to default Pythagorean distance on Euclidean plane
-            }
-
             std::vector<Motion *> trajectoryMatrix_{nullptr};
-
-            std::function<double(base::State *state1, base::State *state2)> distanceFunc;
 
             /** \brief Compute distance between states, default is Euclidean distance */
             std::function<double(base::State *state1, base::State *state2)> distanceFunc_;
@@ -335,12 +353,14 @@ namespace ompl
             /** \brief The maximum flow time for a given flow propagation step. Must be set by the user */
             double Tm_;
 
-            /** \brief The distance tolerance from the goal state for a state to be regarded as a valid final state. Default is .1 */
+            /** \brief The distance tolerance from the goal state for a state to be regarded as a valid final state.
+             * Default is .1 */
             double tolerance_{.1};
 
             double minStepLength = 1e-06;
 
-            /** \brief The flow time for a given integration step, within a flow propagation step. Must be set by user */
+            /** \brief The flow time for a given integration step, within a flow propagation step. Must be set by user
+             */
             double flowStepLength_;
 
             /** \brief Minimum input value */
@@ -363,31 +383,51 @@ namespace ompl
             /** \brief Function that returns true if a state is in the flow set, and false if not. */
             std::function<bool(base::State *state)> unsafeSet_;
 
-            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
+            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax,
+                                        base::State *x_new)>
+                flowPropagation_;
 
             RNG rng_;
 
-            /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
-            std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_ = 
-                [this](std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex) -> bool {
-                    base::State *previous_temp = si_->allocState();
-                    base::State *temp = si_->allocState();
-                    for (int i = 0; i < propStepStates->size(); i++){
-                        for(int j = 0; j < propStepStates->at(i).size(); j++){
-                            temp->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = propStepStates->at(i).at(j);
-                        }
-                        if (obstacleSet(temp)){
-                            if (i == 0)
-                                si_->copyState(new_state, temp);
-                            else 
-                                si_->copyState(new_state, previous_temp);
-                            return true;
-                        }
-                        si_->copyState(previous_temp, temp);
-                    }
-                    return false;
-            };
+            void push_back_state(std::vector<std::vector<double>> *states_list, base::State *state)
+            {
+                ompl::base::RealVectorStateSpace::StateType *state_vec =
+                    state->as<ompl::base::RealVectorStateSpace::StateType>();
+                std::vector<double> new_state;
+                for (int i = 0; i < si_->getStateDimension(); i++)
+                    new_state.push_back(state_vec->values[i]);
+                states_list->push_back(new_state);
+            }
 
+            /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
+            std::function<bool(std::vector<std::vector<double>> *propStepStates,
+                               std::function<bool(base::State *state)> obstacleSet, double ts, double tf,
+                               base::State *new_state, int tFIndex)>
+                collisionChecker_ = [this](std::vector<std::vector<double>> *propStepStates,
+                                           std::function<bool(base::State *state)> obstacleSet, double ts, double tf,
+                                           base::State *new_state, int tFIndex) -> bool
+            {
+                base::State *previous_temp = si_->allocState();
+                base::State *temp = si_->allocState();
+                for (int i = 0; i < propStepStates->size(); i++)
+                {
+                    for (int j = 0; j < propStepStates->at(i).size(); j++)
+                    {
+                        temp->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] =
+                            propStepStates->at(i).at(j);
+                    }
+                    if (obstacleSet(temp))
+                    {
+                        if (i == 0)
+                            si_->copyState(new_state, temp);
+                        else
+                            si_->copyState(new_state, previous_temp);
+                        return true;
+                    }
+                    si_->copyState(previous_temp, temp);
+                }
+                return false;
+            };
 
             /** \brief Name of input sampling method, default is "uniform" */
             std::string inputSamplingMethod_{"uniform"};
@@ -395,7 +435,7 @@ namespace ompl
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion *lastGoalMotion_{nullptr};
         };
-    }
-}
+    }  // namespace geometric
+}  // namespace ompl
 
 #endif

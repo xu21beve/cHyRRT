@@ -4,16 +4,12 @@
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
 #include <ompl/control/ODESolver.h>
-#include "include/hyRRT.h"
+#include "../HyRRT.h"
+// #include <ompl/geometric/planners/rrt/HyRRT.h>
 #include "ompl/control/spaces/RealVectorControlSpace.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
-// #include "CommonMath/Trajectory.hpp"
-// #include "include/polyFit.hpp"
-// #include "quartic.cpp"
-// #include "CommonMath/RectPrism.hpp"
-// #include "CommonMath/ConvexObj.hpp"
 #include <list>
 
 namespace base = ompl::base;
@@ -21,20 +17,19 @@ namespace tools = ompl::tools;
 
 using namespace std::chrono;
 
-ompl::geometric::hyRRT::hyRRT(const base::SpaceInformationPtr &si_)
-    : base::Planner(si_, "hyRRT")
+ompl::geometric::HyRRT::HyRRT(const base::SpaceInformationPtr &si_) : base::Planner(si_, "HyRRT")
 {
     specs_.approximateSolutions = false;
     specs_.directed = true;
 }
 
-ompl::geometric::hyRRT::~hyRRT(void)
+ompl::geometric::HyRRT::~HyRRT(void)
 {
     // free any allocated memory
     freeMemory();
 }
 
-void ompl::geometric::hyRRT::init_tree()
+void ompl::geometric::HyRRT::init_tree()
 {
     // get input states with PlannerInputStates helper, pis_
     while (const base::State *st = pis_.nextStart())
@@ -47,7 +42,7 @@ void ompl::geometric::hyRRT::init_tree()
     }
 }
 
-void ompl::geometric::hyRRT::random_sample(Motion *random_motion, std::mt19937 gen)
+void ompl::geometric::HyRRT::random_sample(Motion *random_motion, std::mt19937 gen)
 {
     base::State *rstate = random_motion->state;
 
@@ -56,26 +51,7 @@ void ompl::geometric::hyRRT::random_sample(Motion *random_motion, std::mt19937 g
     sampler->sampleUniform(rstate);
 }
 
-bool checkBounds(base::State *state)
-{
-    std::vector<double> x_cur = {state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3]};
-    if (x_cur[0] < 0.5 || x_cur[0] > 6 || x_cur[1] < 0 || x_cur[1] > 7)
-        return false;
-    return true;
-}
-
-void push_back_state(std::vector<std::vector<double>> *states_list, base::State *state)
-{
-    ompl::base::RealVectorStateSpace::StateType *state_vec = state->as<ompl::base::RealVectorStateSpace::StateType>();
-    std::vector<double> new_state;
-    new_state.push_back(state_vec->values[0]);
-    new_state.push_back(state_vec->values[1]);
-    new_state.push_back(0.0);
-    new_state.push_back(state_vec->values[6]);
-    states_list->push_back(new_state);
-}
-
-base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTerminationCondition &ptc)
+base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc)
 {
     auto start = high_resolution_clock::now();
 
@@ -92,14 +68,14 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
     double tsCollision = 0.0;
     int totalCollisions = 0;
     double totalIntTime = 0.0;
-    unsigned int tFIndex = si_->getStateDimension() - 4;
-    unsigned int tJIndex = si_->getStateDimension() - 3;
+    unsigned int tFIndex = si_->getStateDimension() - 2;
+    unsigned int tJIndex = si_->getStateDimension() - 1;
 
     while (const base::State *st = pis_.nextStart())
     {
         auto *motion = new Motion(si_);
         si_->copyState(motion->state, st);
-        motion->root = motion->state; // this state is the root of a tree
+        motion->root = motion->state;  // this state is the root of a tree
         // Add start motion to the tree
         nn_->add(motion);
     }
@@ -142,8 +118,10 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
         double random = rand();
         double randomFlowTimeMax = random / RAND_MAX * Tm_;
 
-        // Create a uniform distribution to select a random index, return the index of a random value between specified interval
-        // TODO: Change this to OMPL sampler, and use the specified sampler --- determine the number of samplers using the number of input ranges specified by user
+        // Create a uniform distribution to select a random index, return the index of a random value between specified
+        // interval
+        // TODO: Change this to OMPL sampler, and use the specified sampler --- determine the number of samplers using
+        // the number of input ranges specified by user
         std::uniform_real_distribution<> dis1(0, inputValues1.size() - 1);
         std::uniform_real_distribution<> dis2(0, inputValues2.size() - 1);
 
@@ -160,109 +138,113 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
         std::vector<std::vector<double>> *propStepStates = new std::vector<std::vector<double>>;
         push_back_state(propStepStates, previous_state);
 
-        // Run either flow or jump propagation until propagation step is completed or collision occurs  // TODO: Add other case for both, then choose randomly, using user-defined threshold for relative probabilities
+        // Run either flow or jump propagation until propagation step is completed or collision occurs  // TODO: Add
+        // other case for both, then choose randomly, using user-defined threshold for relative probabilities
         switch (priority)
         {
-        case false: // Flow
-            while (tFlow < randomFlowTimeMax && flowSet_(new_motion->state))
-            {
-                collision = false;
-                tFlow += flowStepLength_;
-
-                // Find new state with flow propagation
-                base::State *new_state = si_->allocState();
-
-                new_state = this->flowPropagation_(std::vector<double>{u1, u2}, previous_state, flowStepLength_, new_state);
-                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength_;
-
-                push_back_state(propStepStates, new_state);
-
-                std::vector<double> startPoint = motion_to_vector(parent_motion->state);
-                std::vector<double> endPoint = motion_to_vector(new_state);
-
-                double ts = startPoint[tFIndex];
-                double tf = endPoint[tFIndex];
-
-                // Place collision checker here
-
-                si_->copyState(previous_state, new_state);
-
-                if (!checkBounds(new_state))
+            case false:  // Flow
+                while (tFlow < randomFlowTimeMax && flowSet_(new_motion->state))
                 {
-                    goto escape;
-                }
+                    printMotion(new_motion);
+                    collision = false;
+                    tFlow += flowStepLength_;
 
-                collision = collisionChecker_(propStepStates, jumpSet_, ts, tf, new_state, tFIndex);
+                    // Find new state with flow propagation
+                    base::State *new_state = si_->allocState();
 
-                // If the motion encounters no collision with jump sets, then add the successful motion to the temporary trees
-                if (!collision)
-                {
-                    si_->copyState(new_motion->state, new_state); // Set parent state for next iterations
-                }
-                else
-                {
-                    totalCollisions++;
-                    si_->copyState(new_motion->state, new_state); // get collision state
-                }
+                    new_state =
+                        this->flowPropagation_(std::vector<double>{u1, u2}, previous_state, flowStepLength_, new_state);
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength_;
 
-                if (tFlow >= randomFlowTimeMax || collision)
-                {
-                    auto *motion = new Motion(si_);
-                    si_->copyState(motion->state, new_state);
-                    motion->parent = parent_motion;
+                    if (unsafeSet_(new_state))
+                        goto nextIteration;
 
-                    si_->freeState(new_state);
-                    collision_parent_motion = motion;
+                    push_back_state(propStepStates, new_state);
 
-                    if (collision)
-                        goto jump;
+                    std::vector<double> startPoint = motion_to_vector(parent_motion->state);
+                    std::vector<double> endPoint = motion_to_vector(new_state);
+
+                    double ts = startPoint[tFIndex];
+                    double tf = endPoint[tFIndex];
+
+                    // Place collision checker here
+
+                    si_->copyState(previous_state, new_state);
+
+                    collision = collisionChecker_(propStepStates, jumpSet_, ts, tf, new_state, tFIndex);
+
+                    // If the motion encounters no collision with jump sets, then add the successful motion to the
+                    // temporary trees
+                    if (!collision)
+                    {
+                        si_->copyState(new_motion->state, new_state);  // Set parent state for next iterations
+                    }
                     else
-                        nn_->add(motion);
-                    break;
+                    {
+                        totalCollisions++;
+                        si_->copyState(new_motion->state, new_state);  // get collision state
+                    }
+
+                    if (tFlow >= randomFlowTimeMax || collision)
+                    {
+                        auto *motion = new Motion(si_);
+                        si_->copyState(motion->state, new_state);
+                        motion->parent = parent_motion;
+
+                        si_->freeState(new_state);
+                        collision_parent_motion = motion;
+
+                        if (collision)
+                            goto jump;
+                        else
+                            nn_->add(motion);
+                        break;
+                    }
+                    pdef_->getGoal()->as<ompl::base::GoalState>()->getState();
+                    // Check if goal is reached. If so, escape to solution checking TODO: Consider moving out to after
+                    // the full propagation for computational efficiency
+                    if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <=
+                        tolerance_)
+                    {
+                        goto escape;
+                    }
                 }
-                pdef_->getGoal()->as<ompl::base::GoalState>()->getState();
-                // Check if goal is reached. If so, escape to solution checking TODO: Consider moving out to after the full propagation for computational efficiency
-                if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <= tolerance_)
-                {
-                    goto escape;
-                }
-            }
-            break;
+                break;
 
-        case true: // Jump (use jumpPropagation)
-            collision_parent_motion = parent_motion;
-        jump:
-            base::State *new_state = si_->allocState();
-            new_state = this->jumpPropagation_(new_motion->state, 0, new_state); // changed from previous_state to new_motion->state
-            new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tJIndex]++;
+            case true:  // Jump (use jumpPropagation)
+                collision_parent_motion = parent_motion;
+            jump:
+                base::State *new_state = si_->allocState();
+                new_state = this->jumpPropagation_(new_motion->state, 0,
+                                                   new_state);  // changed from previous_state to new_motion->state
+                new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tJIndex]++;
 
-            if (!checkBounds(new_state))
-            {
-                goto escape;
-            }
+                if (unsafeSet_(new_state))
+                    goto nextIteration;
 
-            si_->copyState(new_motion->state, new_state);
+                si_->copyState(new_motion->state, new_state);
 
-            auto *motion = new Motion(si_);
-            si_->copyState(motion->state, new_state);
-            motion->parent = collision_parent_motion;
+                auto *motion = new Motion(si_);
+                si_->copyState(motion->state, new_state);
+                motion->parent = collision_parent_motion;
 
-            nn_->add(motion);
-            nn_->add(collision_parent_motion);
-            si_->freeState(new_state);
+                nn_->add(motion);
+                nn_->add(collision_parent_motion);
+                si_->freeState(new_state);
 
-            break;
+                break;
         }
 
     escape:
         si_->freeState(previous_state);
-        if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <= 0.1) // finalDistance <= 0.01 || TODO: Add back in later
+        if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <= 0.1)
         {
             vector<Motion *> trajectory;
             nn_->list(trajectory);
             std::vector<Motion *> mpath;
 
-            double finalDistance = distanceFunc_(trajectory.back()->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState());
+            double finalDistance =
+                distanceFunc_(trajectory.back()->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState());
             Motion *solution = new_motion;
 
             // Construct the path from the goal to the start by following the parent pointers
@@ -280,7 +262,8 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
             path->getStates().reserve(mpath.size());
 
             // Add the states to the path in reverse order (from start to goal)
-            for (int i = mpath.size() - 1; i >= 0; --i) {
+            for (int i = mpath.size() - 1; i >= 0; --i)
+            {
                 path->append(mpath[i]->state);
                 trajectoryMatrix_.push_back(mpath[i]);
             }
@@ -290,7 +273,8 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
             pdef_->getSolutionPath()->as<ompl::geometric::PathGeometric>()->printAsMatrix(std::cout);
 
             // To get the value of duration use the count()
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
             cout << "total duration (microseconds): " << duration.count() << endl;
 
             // Return a status indicating that an exact solution has been found
@@ -299,18 +283,20 @@ base::PlannerStatus ompl::geometric::hyRRT::solve(const base::PlannerTermination
             else
                 return base::PlannerStatus::EXACT_SOLUTION;
         }
+    nextIteration:
     }
-    return base::PlannerStatus::INFEASIBLE; // if failed to find a path within specified max number of iteratioins, then path generation has failed
+    return base::PlannerStatus::INFEASIBLE;  // if failed to find a path within specified max number of iteratioins,
+                                             // then path generation has failed
 }
 
-void ompl::geometric::hyRRT::clear(void)
+void ompl::geometric::HyRRT::clear(void)
 {
     Planner::clear();
     // clear the data structures here
 }
 
 // optional, if additional setup/configuration is needed, the setup() method can be implemented
-void ompl::geometric::hyRRT::setup()
+void ompl::geometric::HyRRT::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
@@ -318,10 +304,10 @@ void ompl::geometric::hyRRT::setup()
     if (!nn_)
         nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
     nn_->setDistanceFunction([this](const Motion *a, const Motion *b)
-                             { return distanceFunction(a, b); });
+                             { return ompl::geometric::HyRRT::distanceFunc_(a->state, b->state); });
 }
 
-void ompl::geometric::hyRRT::freeMemory()
+void ompl::geometric::HyRRT::freeMemory()
 {
     if (nn_)
     {
@@ -336,7 +322,7 @@ void ompl::geometric::hyRRT::freeMemory()
     }
 }
 
-void ompl::geometric::hyRRT::getPlannerData(base::PlannerData &data) const
+void ompl::geometric::HyRRT::getPlannerData(base::PlannerData &data) const
 {
     Planner::getPlannerData(data);
 
