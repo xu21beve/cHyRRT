@@ -11,7 +11,7 @@ A C++ hybrid rapidly-exploring random tree motion planner, compatible with OMPL 
 
 **Motion Planning** is a computational problem that involves finding a sequence of valid configurations to move the robot from the source to the destination. 
 
-This repository provides the implementation of **HyRRT** in C++, compatible with OMPL and ROS 2 Humble. Vertices are implemented as the datatype [ompl::base::State *](https://ompl.kavrakilab.org/classompl_1_1base_1_1State.html) and edges as vectors of the same datatype. The theory analysis of HyRRT can be found at [N. Wang and R. G. Sanfelice](https://ieeexplore.ieee.org/document/9992444). Furthermore, we provide a [MATLAB](https://github.com/HybridSystemsLab/hybridRRT) version, without compatibility with OMPL and ROS.
+This repository provides the implementation of **HyRRT** in C++, compatible with OMPL and ROS 2 Humble. Vertices are implemented as the datatype [ompl::base::State *](https://ompl.kavrakilab.org/classompl_1_1base_1_1State.html) and edges as vectors of the same datatype. The theory analysis of HyRRT can be found at [N. Wang and R. G. Sanfelice](https://ieeexplore.ieee.org/document/9992444). Furthermore, we already provide a [MATLAB](https://github.com/HybridSystemsLab/hybridRRT) version, without compatibility with OMPL and ROS.
 
 **Your stars, forks and PRs are welcome!**
 
