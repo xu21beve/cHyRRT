@@ -1,4 +1,4 @@
-# cHyRRT
+![image](https://github.com/xu21beve/cHyRRT/assets/73717685/8c3eb9dd-e308-400c-ab08-96dfb3f403bd)# cHyRRT
 A C++ hybrid rapidly-exploring random tree motion planner, compatible with OMPL and ROS 2 Humble.
 
 <p align="center">
@@ -11,7 +11,7 @@ A C++ hybrid rapidly-exploring random tree motion planner, compatible with OMPL 
 
 **Motion Planning** is a computational problem that involves finding a sequence of valid configurations to move the robot from the source to the destination. 
 
-This repository provides the implementation of **HyRRT** in C++, compatible with OMPL and ROS 2 Humble. The theory analysis can be found at [motion-planning](https://ieeexplore.ieee.org/document/9992444). Furthermore, we provide a [MATLAB](https://github.com/HybridSystemsLab/hybridRRT) version, without compatibility with OMPL and ROS.
+This repository provides the implementation of **HyRRT** in C++, compatible with OMPL and ROS 2 Humble. The theory analysis can be found at [N. Wang and R. G. Sanfelice](https://ieeexplore.ieee.org/document/9992444). Furthermore, we provide a [MATLAB](https://github.com/HybridSystemsLab/hybridRRT) version, without compatibility with OMPL and ROS.
 
 **Your stars, forks and PRs are welcome!**
 
@@ -112,12 +112,20 @@ doxygen
 
 For more information about the project usage, please refer to the following table.
 
-| Index | Document | Introduction |
+| Required | Name | Description |
 |:----:|:----:|:----:|
-|0|[![Status](https://img.shields.io/badge/config-grey?logo=ROS)](https://github.com/ai-winter/ros_motion_planning/blob/master/docs/configuration.md)|Introduce how to dynamically configure parameters such as robot types, planning algorithms, environmental obstacles, etc.
-|1|[![Status](https://img.shields.io/badge/docker-grey?logo=ROS)](https://github.com/ai-winter/ros_motion_planning/blob/master/docs/docker.md)|Introduce how to use Docker to conveniently build the project environment and simulate it.
-|2|[![Status](https://img.shields.io/badge/real-grey?logo=ROS)](https://github.com/ai-winter/ros_motion_planning/blob/master/docs/realworld.md)|Introduce how to build a real robot application based on the algorithms provided in this repository.
-|3|[![Status](https://img.shields.io/badge/history-grey?logo=ROS)](https://github.com/ai-winter/ros_motion_planning/blob/master/docs/history.md)|Important updates.
+|Yes| maxInputValue_ | Vector of maximum input values (std::vector<double>)
+|Yes| minInputValue_ | Vector of minimum input values (std::vector<double>)
+|Yes| Tm_ | The maximum flow time for a given flow propagation step. (double)
+|Yes| flowStepLength_ | The flow time for a given integration step, within a flow propagation step. (double)
+|No| goalTolerance_ | The distance tolerance from the goal state for a state to be regarded as a valid final state. Default is .1 (double)
+|Yes| jumpSet_ | Function that returns true if a state is in the jump set, and false if not. (std::function<bool(ompl::base::State *)>)
+|Yes| flowSet_ | Function that returns true if a state is in the flow set, and false if not. (std::function<bool(ompl::base::State *)>)
+|No| unsafeSet_ | Function that returns true if a state is in the unsafe set, and false if not. (std::function<bool(ompl::base::State )>)
+|No| distanceFunc_ | Function that computes distance between states, default is Euclidean distance. (std::function<double(ompl::base::State *, ompl::base::State *)>)
+|Yes| jumpPropagation_ | Jump map for propagating a state once. (std::function<ompl::base::State *(ompl::base::State *x_cur, double u, ompl::base::State *x_new)>
+|Yes| flowPropagation_ | Flow map for propagating a state over the given flow time. (std::function<base::State *(std::vector<double> input, ompl::base::State *x_cur, double Tm_rand, ompl::base::State *x_new)>)
+|No| collisionChecker_ | Function that returns true and modifies the state if collides into the obstacleSet. Default is point-by-point collision checking using the jump set. Refer to **HyRRT.h** for method signature. 
 
 ## <span id="2">02. Acknowledgments
 * Our robot and world models are from [
