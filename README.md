@@ -116,11 +116,7 @@ For more information about the project usage, please refer to the following tabl
 |No| collisionChecker_ | Function that returns true and modifies the state if collides into the obstacleSet. Default is point-by-point collision checking using the jump set. Refer to **HyRRT.h** for method signature. 
 
 ## <span id="2">02. Acknowledgments
-* Our robot and world models are from [
-Dataset-of-Gazebo-Worlds-Models-and-Maps](https://github.com/mlherd/Dataset-of-Gazebo-Worlds-Models-and-Maps) and [
-aws-robomaker-small-warehouse-world](https://github.com/aws-robotics/aws-robomaker-small-warehouse-world). Thanks for these open source models sincerely.
-
-* A ROS costmap plugin for [dynamicvoronoi](http://www2.informatik.uni-freiburg.de/~lau/dynamicvoronoi/) presented by Boris Lau.
+* Our collision checker in the multicopter (collision-resilient drone) example are from UC Berkeley's 
 
 ## <span id="3">03. License
 
