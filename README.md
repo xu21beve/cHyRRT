@@ -1,4 +1,4 @@
-![image](https://github.com/xu21beve/cHyRRT/assets/73717685/8c3eb9dd-e308-400c-ab08-96dfb3f403bd)# cHyRRT
+# cHyRRT
 A C++ hybrid rapidly-exploring random tree motion planner, compatible with OMPL and ROS 2 Humble.
 
 <p align="center">
