@@ -198,17 +198,17 @@ namespace ompl
                 distanceFunc_ = function;
             }
 
-            void setJumpPropagationFunction(
+            void setDiscreteSimulator(
                 std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> function)
             {
-                jumpPropagation_ = function;
+                discreteSimulator_ = function;
             }
 
-            void setFlowPropagationFunction(std::function<base::State *(std::vector<double> inputs, base::State *x_cur,
+            void setContinuousSimulator(std::function<base::State *(std::vector<double> inputs, base::State *x_cur,
                                                                         double tFlowMax, base::State *x_new)>
                                                 function)
             {
-                flowPropagation_ = function;
+                continuousSimulator_ = function;
             }
 
             void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates,
@@ -260,11 +260,11 @@ namespace ompl
 
             void checkAllParametersSet()
             {
-                if (!jumpPropagation_)
+                if (!discreteSimulator_)
                 {
                     throw ompl::Exception("Jump map not set");
                 }
-                if (!flowPropagation_)
+                if (!continuousSimulator)
                 {
                     throw ompl::Exception("Flow map not set");
                 }
@@ -372,7 +372,7 @@ namespace ompl
             /** \brief Max distance, need to remove */
             double maxDistance_{0.};
 
-            std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> jumpPropagation_;
+            std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> discreteSimulator_;
 
             /** \brief Function that returns true if a state is in the jump set, and false if not. */
             std::function<bool(base::State *state)> jumpSet_;

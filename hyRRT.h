@@ -228,14 +228,14 @@ namespace ompl
                 distanceFunc_ = function;
             }
 
-            void setJumpPropagationFunction(std::function<base::State *(base::State *x_cur, std::vector<double> u, base::State *x_new)> function)
+            void setDiscreteSimulator(std::function<base::State *(base::State *x_cur, std::vector<double> u, base::State *x_new)> function)
             {
-                jumpPropagation_ = function;
+                discreteSimulator_ = function;
             }
 
-            void setFlowPropagationFunction(std::function<base::State *(std::vector<double> inputs, base::State *x_cur, double tFlowMax, base::State *x_new)> function)
+            void setContinuousSimulator(std::function<base::State *(std::vector<double> inputs, base::State *x_cur, double tFlowMax, base::State *x_new)> function)
             {
-                flowPropagation_ = function;
+                continuousSimulator_ = function;
             }
 
             void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> function)
@@ -399,11 +399,11 @@ namespace ompl
 
             void checkAllParametersSet()
             {
-                if (!jumpPropagation_)
+                if (!discreteSimulator_)
                 {
                     throw ompl::Exception("Jump map not set");
                 }
-                if (!flowPropagation_)
+                if (!continuousSimulator_)
                 {
                     throw ompl::Exception("Flow map not set");
                 }
@@ -511,7 +511,7 @@ namespace ompl
             /** \brief Max distance, need to remove */
             double maxDistance_{0.};
 
-            std::function<base::State *(base::State *x_cur, std::vector<double> u, base::State *x_new)> jumpPropagation_;
+            std::function<base::State *(base::State *x_cur, std::vector<double> u, base::State *x_new)> discreteSimulator_;
 
             /** \brief Function that returns true if a state is in the jump set, and false if not. */
             std::function<bool(base::State *state)> jumpSet_;
@@ -522,7 +522,7 @@ namespace ompl
             /** \brief Function that returns true if a state is in the flow set, and false if not. */
             std::function<bool(base::State *state)> unsafeSet_;
 
-            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> flowPropagation_;
+            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax, base::State *x_new)> continuousSimulator_;
 
             ompl::RNG *randomSampler_ = new ompl::RNG(); // Default constructor always seeds a different value
 

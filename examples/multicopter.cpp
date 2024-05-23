@@ -558,8 +558,8 @@ int main()
     cHyRRT.setProblemDefinition(pdef);
     cHyRRT.setup();
     cHyRRT.setDistanceFunction(distanceFunc);
-    cHyRRT.setFlowPropagationFunction(flowPropagation);
-    cHyRRT.setJumpPropagationFunction(jumpPropagation);
+    cHyRRT.setContinuousSimulator(flowPropagation);
+    cHyRRT.setDiscreteSimulator(jumpPropagation);
     cHyRRT.setFlowSet(flowSet);
     cHyRRT.setJumpSet(jumpSet);
     cHyRRT.setTm(0.5);

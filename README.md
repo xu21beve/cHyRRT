@@ -111,8 +111,8 @@ For more information about the project usage, please refer to the following tabl
 |Yes| flowSet_ | Function that returns true if a state is in the flow set, and false if not. (std::function<bool(ompl::base::State *)>)
 |No| unsafeSet_ | Function that returns true if a state is in the unsafe set, and false if not. (std::function<bool(ompl::base::State )>)
 |No| distanceFunc_ | Function that computes distance between states, default is Euclidean distance. (std::function<double(ompl::base::State *, ompl::base::State *)>)
-|Yes| jumpPropagation_ | Jump map for propagating a state once. (std::function<ompl::base::State *(ompl::base::State *x_cur, double u, ompl::base::State *x_new)>
-|Yes| flowPropagation_ | Flow map for propagating a state over the given flow time. (std::function<base::State *(std::vector<double> input, ompl::base::State *x_cur, double Tm_rand, ompl::base::State *x_new)>)
+|Yes| discreteSimulator_ | Jump map for propagating a state once. (std::function<ompl::base::State *(ompl::base::State *x_cur, double u, ompl::base::State *x_new)>
+|Yes| continuousSimulator_ | Flow map for propagating a state over the given flow time. (std::function<base::State *(std::vector<double> input, ompl::base::State *x_cur, double Tm_rand, ompl::base::State *x_new)>)
 |No| collisionChecker_ | Function that returns true and modifies the state if collides into the obstacleSet. Default is point-by-point collision checking using the jump set. Refer to **HyRRT.h** for method signature. 
 
 ## <span id="2">02. Acknowledgments
