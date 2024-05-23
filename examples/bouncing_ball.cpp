@@ -1,8 +1,7 @@
 #include <ompl/base/Planner.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
-#include "../include/hyRRT.h"
-// #include <ompl/control/spaces/RealVectorControlSpace.h>
+#include "../include/HyRRT.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
@@ -13,7 +12,7 @@
 #include "../CommonMath/RectPrism.hpp"
 #include "../CommonMath/ConvexObj.hpp"
 #include <list>
-#include "../include/hyRRT.h"
+#include "../include/HyRRT.h"
 
 using namespace CommonMath;
 
@@ -36,10 +35,10 @@ bool jumpSet(ompl::base::State *state)
     {
         return true;
     }
-    else if (pos_cur >= -0.1)
-    { // TODO: Make 0?
-        return false;
-    }
+    // else if (pos_cur >= -0.1)
+    // { // TODO: Make 0?
+    //     return false;
+    // }
     else
     {
         return false;
@@ -69,8 +68,8 @@ ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State
     // cout << "flowing" << endl;
     // double input_accel = input->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
 
-    double v = velocity + (inputs[0])*tFlow;                               // v = v0 + at
-    double x = pos_cur + velocity * tFlow + inputs[0] * pow(tFlow, 2) / 2; // x = v0 * t + 1/2(at^2)
+    double v = velocity + (acceleration_cur)*tFlow;                               // v = v0 + at
+    double x = pos_cur + velocity * tFlow + (acceleration_cur) * pow(tFlow, 2) / 2; // x = v0 * t + 1/2(at^2)
     double tFlow_new = tFlow_cur + tFlow;
 
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = x;
@@ -81,7 +80,7 @@ ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State
     return new_state;
 }
 
-ompl::base::State *jumpPropagation(ompl::base::State *x_cur, double u, ompl::base::State *new_state)
+ompl::base::State *jumpPropagation(ompl::base::State *x_cur, std::vector<double> u, ompl::base::State *new_state)
 {
     double velocity = -0.8 * x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
     double acceleration = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
@@ -93,7 +92,7 @@ ompl::base::State *jumpPropagation(ompl::base::State *x_cur, double u, ompl::bas
     double x = pos_cur;  // x = v0 * t + 1/2(at^2) ------ removed acceleration:  + acceleration * pow(tJump, 2) / 2
 
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = x;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = v - u;
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = v - u[0];
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] = acceleration;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = tFlow_cur; // No change in flow time
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] = tJump_cur;  // No change in jump time
@@ -138,12 +137,11 @@ int main()
     // Set the start and goal states
     pdef->setStartAndGoalStates(start, goal, 0.1);
 
-    ompl::geometric::hyRRT cHyRRT(si);
+    ompl::geometric::HyRRT cHyRRT(si);
 
     // Set the problem instance for our planner to solve
     cHyRRT.setProblemDefinition(pdef);
     cHyRRT.setup();
-    // cHyRRT.defineModel(jumpPropagation, flowPropagation, distanceFunc);
 
     cHyRRT.setFlowPropagationFunction(flowPropagation);
     cHyRRT.setJumpPropagationFunction(jumpPropagation);
@@ -151,8 +149,12 @@ int main()
     cHyRRT.setFlowSet(flowSet);
     cHyRRT.setJumpSet(jumpSet);
     cHyRRT.setTm(0.5);
-    cHyRRT.setFlowStepLength(0.01);
-    cHyRRT.setInputRange(std::vector<double>{-9.81}, std::vector<double>{-9.81});   // If input is a single value, only that value will every be used
+    cHyRRT.setFlowStepLength(0.001);
+        cout << "Made it this far" << std::endl;
+
+    cHyRRT.setFlowInputRange(std::vector<double>{-9.81}, std::vector<double>{-9.81});   // If input is a single value, only that value will every be used
+    cHyRRT.setJumpInputRange(std::vector<double>{0}, std::vector<double>{0});
+    cout << "Made it this far" << std::endl;
     cHyRRT.setUnsafeSet(unsafeSet);
 
     // attempt to solve the planning problem within one second of
@@ -160,7 +162,7 @@ int main()
     ompl::base::PlannerStatus solved = cHyRRT.solve(ompl::base::timedPlannerTerminationCondition(10000));
     cout << "solution status: " << solved << endl;
 
-    std::vector<ompl::geometric::hyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
+    std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
     for(auto &m : trajectory) {
         std::cout << "x: " << m->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << std::endl;
     }

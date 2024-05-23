@@ -1,8 +1,7 @@
 #include <ompl/base/Planner.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
-#include "../include/hyRRT.h"
-// #include <ompl/control/spaces/RealVectorControlSpace.h>
+#include "../include/HyRRT.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
@@ -13,7 +12,7 @@
 #include "../CommonMath/RectPrism.hpp"
 #include "../CommonMath/ConvexObj.hpp"
 #include <list>
-#include "../include/hyRRT.h"
+#include "../include/HyRRT.h"
 
 using namespace CommonMath;
 
@@ -50,6 +49,7 @@ DetailedCollisionResult polyCollisionChecker(
 
     // First find the position halfway between the start and end time of this segment
     double midTime = (ts + tf) / 2.0;
+    std::cout << "tf: " << tf << " midtime: " << midTime << " endTime_: " << _traj.GetEndTime() << std::endl;
     Vec3 midpoint = _traj.GetValue(midTime);
 
     if (obstacle->IsPointInside(midpoint))
@@ -258,7 +258,7 @@ Trajectory polyFit3D(std::vector<std::vector<double>> states)
         xValues[rows] = states[rows][0];
         yValues[rows] = states[rows][1];
         // zValues[rows] = states[rows][2];
-        tValues.push_back(states[rows][3]);
+        tValues.push_back(states[rows][8]);
     }
 
     xCoeffs = polyfit_Eigen(tValues, xValues, 5);
@@ -283,7 +283,6 @@ double distanceFunc(ompl::base::State *state1, ompl::base::State *state2)
     return fabs(dist);
 }
 
-// TODO: Only for multicopter example, need to remove and place in example folder
 bool collisionregion1(double x1, double x2, double v1, double v2)
 { // True if collision
     return x1 <= 4.5 && x1 >= 0.5 && x2 >= 1 && x2 <= 1.5;
@@ -348,7 +347,7 @@ bool jumpSet(ompl::base::State *state)
     bool value = false;
 
     // Jump state
-    if (Xu(x1, x2))
+    if (Xu(x1, x2) || collisionregion1(x1, x2, v1, v2) || collisionregion2(x1, x2, v1, v2) || collisionregion3(x1, x2, v1, v2) || collisionregion4(x1, x2, v1, v2) || collisionregion5(x1, x2, v1, v2) || collisionregion6(x1, x2, v1, v2) || collisionregion7(x1, x2, v1, v2))
     {
         value = true;
     }
@@ -363,6 +362,9 @@ bool flowSet(ompl::base::State *state)
 
 bool unsafeSet(ompl::base::State *state)
 {
+    std::vector<double> x_cur = {state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2], state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3]};
+    if (x_cur[0] < 0.5 || x_cur[0] > 6 || x_cur[1] < 0 || x_cur[1] > 7)
+        return true;
     return false;
 }
 
@@ -376,10 +378,11 @@ ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State
     double x6 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[5];
     double x7 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[6];
     double x8 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[7];
+    double x9 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[8];
+    double x10 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[9];
 
     x1 = x1 + x3 * tFlow + x5 * pow(tFlow, 2) / 2; // x = v0 * t + 1/2(at^2)
     x2 = x2 + x4 * tFlow + x6 * pow(tFlow, 2) / 2; // x = v0 * t + 1/2(at^2)
-    // double tFlow_new = x7 + tFlow;
     x3 = x3 + (x5)*tFlow; // v = v0 + at
     x4 = x4 + (x6)*tFlow;
     x5 += inputs[0];
@@ -391,21 +394,25 @@ ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = x4;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] = x5;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] = x6;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] = x7;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] = x8;        // No change in jump time
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] = inputs[0]; // Append control input to state
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[9] = inputs[1]; // Append control input to state
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] = inputs[0];
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] = inputs[1];        // No change in jump time
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] = x9; // Append control input to state
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[9] = x10; // Append control input to state
     return new_state;
 }
 
-ompl::base::State *jumpPropagation(ompl::base::State *x_cur, double u, ompl::base::State *new_state)
+ompl::base::State *jumpPropagation(ompl::base::State *x_cur, std::vector<double> u, ompl::base::State *new_state)
 {
     double x1 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
     double x2 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
     double x3 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
     double x4 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[3];
+    double x5 = 0.0;
+    double x6 = 0.0;
     double x7 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[6];
     double x8 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[7];
+    double x9 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[8];
+    double x10 = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[9];
 
     double e = 0.43;
     double kappa = 0.20;
@@ -434,19 +441,20 @@ ompl::base::State *jumpPropagation(ompl::base::State *x_cur, double u, ompl::bas
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = x1;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = x2;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] = x3;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = x4; // No change in flow time
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] = x4;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] = 0;
     new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] = 0;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] = x7;
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] = x8; // No change in jump time
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] = 0;  // Append control input to state
-    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[9] = 0;  // Append control input to state
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] = 0;    // No control input
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] = 0;    // No control input
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] = x9;  // No change in flow time
+    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[9] = x10;  // No change in jump time
     return new_state;
 }
 
 bool collisionChecker(std::vector<std::vector<double>> *propStepStates, std::function<bool(ompl::base::State *state)> obstacleSet, double ts, double tf, ompl::base::State *new_state, int tFIndex)
 {
     Trajectory _traj = polyFit3D(*propStepStates);
+    std::cout << "initial tf: " << tf << std::endl;
 
     DetailedCollisionResult leftCollisionResult = polyCollisionChecker(ts, tf, leftRectPrism, 1e-03, 0, _traj);
     DetailedCollisionResult topCollisionResult = polyCollisionChecker(ts, tf, topRectPrism, 1e-03, 0, _traj);
@@ -544,26 +552,34 @@ int main()
     // Set the start and goal states
     pdef->setStartAndGoalStates(start, goal, 0.1);
 
-    ompl::geometric::hyRRT cHyRRT(si);
+    ompl::geometric::HyRRT cHyRRT(si);
 
     // Set the problem instance for our planner to solve
     cHyRRT.setProblemDefinition(pdef);
     cHyRRT.setup();
-    // cHyRRT.defineModel(jumpPropagation, flowPropagation, distanceFunc);
-
+    cHyRRT.setDistanceFunction(distanceFunc);
     cHyRRT.setFlowPropagationFunction(flowPropagation);
     cHyRRT.setJumpPropagationFunction(jumpPropagation);
-    cHyRRT.setDistanceFunction(distanceFunc);
     cHyRRT.setFlowSet(flowSet);
     cHyRRT.setJumpSet(jumpSet);
     cHyRRT.setTm(0.5);
     cHyRRT.setFlowStepLength(0.01);
-    cHyRRT.setInputRange(std::vector<double>{-0.5, 1}, std::vector<double>{-1, 1});
+    cHyRRT.setFlowInputRange(std::vector<double>{-0.5, -1}, std::vector<double>{1, 1});
+    cHyRRT.setJumpInputRange(std::vector<double>{0, 0}, std::vector<double>{0, 0});
     cHyRRT.setUnsafeSet(unsafeSet);
-    // cHyRRT.setCollisionChecker(collisionChecker);
+    cHyRRT.setCollisionChecker(collisionChecker);
 
     // attempt to solve the planning problem within one second of
     // planning time
     ompl::base::PlannerStatus solved = cHyRRT.solve(ompl::base::timedPlannerTerminationCondition(10000));
     cout << "solution status: " << solved << endl;
+
+    std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
+    for(auto &m : trajectory) {
+        std::cout << "x: " << m->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << std::endl;
+    }
+
+    // Do ROS visualization here
+    // ompl::base::PathPtr &plannerData = pdef.getSolutionPath();
+    // cHyRRT.getPlannerData(plannerData);
 }
