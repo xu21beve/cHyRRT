@@ -98,7 +98,7 @@ The overall file structure is shown below.
     └── yourSrcFiles.cpp
 ```
 
-For more information about the project usage, please refer to the following table.
+For more information about the project's customizeable parameters, please refer to the following table.
 
 | Required | Name | Description |
 |:----:|:----:|:----:|
@@ -115,8 +115,18 @@ For more information about the project usage, please refer to the following tabl
 |Yes| continuousSimulator_ | Flow map for propagating a state over the given flow time. (std::function<base::State *(std::vector<double> input, ompl::base::State *x_cur, double Tm_rand, ompl::base::State *x_new)>)
 |No| collisionChecker_ | Function that returns true and modifies the state if collides into the obstacleSet. Default is point-by-point collision checking using the jump set. Refer to **HyRRT.h** for method signature. 
 
+For more information about the project's available random sampling distributions for inputs, please refer to the following table. All descriptions and names are credited to [the Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/)
+| Name | Description | Required Parameters |
+|:----:|:----:|:----:|
+|UNIFORM_INT| Uniform sampling of integers within between the given maximum and minimum integers. | Minimum integer value(s), maximum integers value(s)
+|UNIFORM_REAL| Uniform sampling of real numbers within between the given maximum and minimum real numbers. | Minimum real number value(s), maximum real number value(s)
+|GAUSSIAN_REAL| Generate a random real using a normal distribution with given mean and variance as real numbers. | Mean, variance
+|HALF_NORMAL_REAL| Generate a random real using a half-normal distribution. The value is within specified bounds [ r_min, r_max], but with a bias towards r_max. The function is implemented using a Gaussian distribution with mean at r_max - r_min. The distribution is 'folded' around r_max axis towards r_min. The variance of the distribution is (r_max - r_min) / focus. The higher the focus, the more probable it is that generated numbers are close to r_max. | r_min, r_max, focus (default is 3.0)
+|HALF_NORMAL_INT| Generate a random integer using a half-normal distribution. The value is within specified bounds ([r_min, r_max]), but with a bias towards r_max. The function is implemented on top of halfNormalReal() | r_min, r_max, focus (default is 3.0)
+
+
 ## <span id="2">02. Acknowledgments
-* Our collision checker in the multicopter (collision-resilient drone) example are from UC Berkeley's 
+* Our collision checker in the multicopter (collision-resilient drone) example are from UC Berkeley's HiPeRLab publication on [Exploiting collisions for sampling-based multicopter motion planning](https://doi.org/10.48550/arXiv.2011.04091). Tools in the CommonMath and Quartic directories are from UC Berkeley's HiPeRLab's [agri-fly repository](https://github.com/muellerlab/agri-fly). 
 
 ## <span id="3">03. License
 
