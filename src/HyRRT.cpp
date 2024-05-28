@@ -62,11 +62,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
 
     // for telemetry
     double totalCollisionTime = 0.0;
-    double totalCollisionPtTime = 0.0;
-    int polyTime = 0;
-    double tsCollision = 0.0;
     int totalCollisions = 0;
-    double totalIntTime = 0.0;
     unsigned int tFIndex = si_->getStateDimension() - 2;
     unsigned int tJIndex = si_->getStateDimension() - 1;
 
