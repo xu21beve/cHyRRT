@@ -60,6 +60,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
 
     base::Goal *goal = pdef_->getGoal().get();
 
+    // for telemetry
     double totalCollisionTime = 0.0;
     double totalCollisionPtTime = 0.0;
     int polyTime = 0;
@@ -107,13 +108,8 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
 
         bool in_jump = jumpSet_(new_motion->state);
         bool in_flow = flowSet_(new_motion->state);
-        bool priority = in_jump && in_flow ? random / RAND_MAX > 0.5 : in_jump ; // If both are true, equal chance of being in flow or jump set. Otherwise, 
+        bool priority = in_jump && in_flow ? random / RAND_MAX > 0.5 : in_jump ; // If both are true, equal chance of being in flow or jump set.
         double tFlow = 0;
-
-        // Create a uniform distribution to select a random index, return the index of a random value between specified
-        // interval
-        // TODO: Change this to OMPL sampler, and use the specified sampler --- determine the number of samplers using
-        // the number of input ranges specified by user
 
         base::State *previous_state = si_->allocState();
         auto *parent_motion = nn_->nearest(random_motion);
@@ -137,7 +133,6 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                     si_->copyState(intermediate_state, previous_state);
                     intermediate_states->push_back(intermediate_state);
                     
-                    // printMotion(new_motion);
                     collision = false;
                     tFlow += flowStepLength_;
 
@@ -252,7 +247,6 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                 mpath.push_back(solution);
                 if(solution->edge != nullptr)   // A jump motion does not contain an edge
                     path_size += solution->edge->size() + 1; // +1 for the end state
-                // printMotion(solution);
 
                 solution = solution->parent;
             }
@@ -297,7 +291,6 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
             else
                 return base::PlannerStatus::EXACT_SOLUTION;
         }
-        // nextIteration:
     }
     return base::PlannerStatus::INFEASIBLE; // if failed to find a path within specified max number of iteratioins, then path generation has failed
 }
@@ -313,7 +306,6 @@ void ompl::geometric::HyRRT::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
-    sc.configurePlannerRange(maxDistance_);
     if (!nn_)
         nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
     nn_->setDistanceFunction([this](const Motion *a, const Motion *b)
