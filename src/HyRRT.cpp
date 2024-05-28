@@ -5,15 +5,9 @@
 #include <ompl/base/GoalTypes.h>
 #include <ompl/control/ODESolver.h>
 #include "../HyRRT.h"
-// #include <ompl/geometric/planners/rrt/HyRRT.h>
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
-// #include "CommonMath/Trajectory.hpp"
-// #include "include/polyFit.hpp"
-// #include "quartic.cpp"
-// #include "CommonMath/RectPrism.hpp"
-// #include "CommonMath/ConvexObj.hpp"
 #include <list>
 
 namespace base = ompl::base;

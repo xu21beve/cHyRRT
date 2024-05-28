@@ -3,7 +3,7 @@
 /*********************************************************************
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2008, Willow Garage, Inc.
+ *  Copyright (c) 2024, University of Santa Cruz Hybrid Systems Laboratory
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-/* Author: Ioan Sucan */
+/* Author: Beverly Xu */
 
 #ifndef OMPL_GEOMETRIC_PLANNERS_RRT_HYRRT_
 #define OMPL_GEOMETRIC_PLANNERS_RRT_HYRRT_
@@ -57,14 +57,22 @@ namespace ompl
         /**
            @anchor HyRRT
            @par Short description
-           RRT is a tree-based motion planner that uses the following
-           idea: RRT samples a random state @b qr in the state space,
-           then finds the state @b qc among the previously seen states
-           that is closest to @b qr and expands from @b qc towards @b
-           qr, until a state @b qm is reached. @b qm is then added to
-           the exploration tree.
-           @par External documentation
-           [fill]. DOI: [fill]
+           Hybrid RRT (HyRRT) is an RRT algorithm that solves separate optimization problems 
+           associated with the flows and jumps of the systems, to solve a variety of robotic 
+           motion planning problems. As an RRT algorithm, HyRRT is probabilistically-complete.
+           The logical flow of the algorithm is as follows:
+           1. Initialize the tree with a start state.
+           2. While a solution has not been found:
+                a. Sample a random state.
+                b. Find the nearest state in the tree to the random state.
+                c. Extend from that state under either the flow or jump regimes, using the continuous
+                    or discrete simulators, respectively.
+                d. Continue until the state is in collision, or the maximum flow time has been exceeded.
+                e. If the state is not within the unsafe set, add the state to the tree. If the state
+                   is in collision, proceed to jump. 
+            3. Return the solution.
+
+           @par External documentation: https://ieeexplore.ieee.org/document/9992444 DOI: [10.1109/CDC51059.2022.9992444]
         */
 
         /** \brief Hybrid Rapidly-exploring Random Trees */
@@ -78,6 +86,8 @@ namespace ompl
             void setup() override;
             void getPlannerData(base::PlannerData &data) const override;
             base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
+
+            // See ompl::RNG for more information about each distribution
             enum inputSamplingMethods_ {
                 UNIFORM_01,
                 UNIFORM_REAL,
