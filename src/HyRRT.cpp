@@ -1,441 +1,362 @@
 // Adapted from OMPL Planner template: https://ompl.kavrakilab.org/newPlanner.html
 
-/*********************************************************************
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2008, Willow Garage, Inc.
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of the Willow Garage nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *********************************************************************/
-
-/* Author: Ioan Sucan */
-
-#ifndef OMPL_GEOMETRIC_PLANNERS_RRT_HYRRT_
-#define OMPL_GEOMETRIC_PLANNERS_RRT_HYRRT_
-
-#include "ompl/datastructures/NearestNeighbors.h"
-#include "ompl/geometric/planners/PlannerIncludes.h"
-#include "ompl/base/spaces/RealVectorStateSpace.h"
-#include <any>
 #include <ompl/base/Planner.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
 #include <ompl/control/ODESolver.h>
+#include "../HyRRT.h"
+// #include <ompl/geometric/planners/rrt/HyRRT.h>
+#include "ompl/base/spaces/RealVectorStateSpace.h"
+#include <ompl/control/SimpleSetup.h>
+#include <ompl/base/goals/GoalState.h>
+// #include "CommonMath/Trajectory.hpp"
+// #include "include/polyFit.hpp"
+// #include "quartic.cpp"
+// #include "CommonMath/RectPrism.hpp"
+// #include "CommonMath/ConvexObj.hpp"
+#include <list>
 
-using namespace std;
+namespace base = ompl::base;
+namespace tools = ompl::tools;
 
-namespace ompl
+using namespace std::chrono;
+
+ompl::geometric::HyRRT::HyRRT(const base::SpaceInformationPtr &si_) : base::Planner(si_, "HyRRT")
 {
-    namespace geometric
+    specs_.approximateSolutions = false;
+    specs_.directed = true;
+}
+
+ompl::geometric::HyRRT::~HyRRT(void)
+{
+    // free any allocated memory
+    freeMemory();
+}
+
+void ompl::geometric::HyRRT::init_tree()
+{
+    // get input states with PlannerInputStates helper, pis_
+    while (const base::State *st = pis_.nextStart())
     {
-        /**
-           @anchor HyRRT
-           @par Short description
-           RRT is a tree-based motion planner that uses the following
-           idea: RRT samples a random state @b qr in the state space,
-           then finds the state @b qc among the previously seen states
-           that is closest to @b qr and expands from @b qc towards @b
-           qr, until a state @b qm is reached. @b qm is then added to
-           the exploration tree.
-           @par External documentation
-           [fill]. DOI: [fill]
-        */
+        auto *motion = new Motion(si_);
+        si_->copyState(motion->state, st);
+        motion->root = motion->state;
+        // Add start motion to the tree
+        nn_->add(motion);
+    }
+}
 
-        /** \brief Hybrid Rapidly-exploring Random Trees */
-        class HyRRT : public base::Planner
+void ompl::geometric::HyRRT::random_sample(Motion *random_motion, std::mt19937 gen)
+{
+    base::State *rstate = random_motion->state;
+
+    base::StateSamplerPtr sampler = si_->allocStateSampler();
+    // Replace later with the ompl sampler, for now leave as custom
+    sampler->sampleUniform(rstate);
+}
+
+base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc)
+{
+    auto start = high_resolution_clock::now();
+
+    // make sure the planner is configured correctly; ompl::base::Planner::checkValidity
+    // ensures that there is at least one input state and a ompl::base::Goal object specified
+    checkValidity();
+    checkAllParametersSet();
+
+    base::Goal *goal = pdef_->getGoal().get();
+
+    double totalCollisionTime = 0.0;
+    double totalCollisionPtTime = 0.0;
+    int polyTime = 0;
+    double tsCollision = 0.0;
+    int totalCollisions = 0;
+    double totalIntTime = 0.0;
+    unsigned int tFIndex = si_->getStateDimension() - 2;
+    unsigned int tJIndex = si_->getStateDimension() - 1;
+
+    while (const base::State *st = pis_.nextStart())
+    {
+        auto *motion = new Motion(si_);
+        si_->copyState(motion->state, st);
+        motion->root = motion->state; // this state is the root of a tree
+        // Add start motion to the tree
+        nn_->add(motion);
+    }
+
+    init_tree();
+
+    // Create random generator (by default, uniform)
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    // Select a random value from the vector
+    std::vector<double> flowInputs;
+    std::vector<double> jumpInputs;
+
+    auto *random_motion = new Motion(si_);
+
+    // periodically check if ptc() returns true.
+    // if it does, terminate planning.
+    int i = 0;
+    nextIteration:
+    while (!ptc())
+    {
+        i++;
+        random_sample(random_motion, gen);
+
+        auto *new_motion = new Motion(si_);
+        new_motion->parent = nn_->nearest(random_motion);
+
+        double random = rand();
+        double randomFlowTimeMax = random / RAND_MAX * Tm_;
+
+        bool in_jump = jumpSet_(new_motion->state);
+        bool in_flow = flowSet_(new_motion->state);
+        bool priority = in_jump && in_flow ? random / RAND_MAX > 0.5 : in_jump ; // If both are true, equal chance of being in flow or jump set. Otherwise, 
+        double tFlow = 0;
+
+        // Create a uniform distribution to select a random index, return the index of a random value between specified
+        // interval
+        // TODO: Change this to OMPL sampler, and use the specified sampler --- determine the number of samplers using
+        // the number of input ranges specified by user
+
+        base::State *previous_state = si_->allocState();
+        auto *parent_motion = nn_->nearest(random_motion);
+        si_->copyState(previous_state, parent_motion->state);
+        auto *collision_parent_motion = nn_->nearest(random_motion);
+
+        bool collision = false;
+        std::vector<std::vector<double>> *propStepStates = new std::vector<std::vector<double>>;
+        push_back_state(propStepStates, previous_state);
+        std::vector<base::State *> *intermediate_states = new std::vector<base::State *>;
+
+        // Run either flow or jump propagation until propagation step is completed or collision occurs  // TODO: Add
+        // other case for both, then choose randomly, using user-defined threshold for relative probabilities
+        switch (priority)
         {
-        public:
-            /** \brief Constructor */
-            HyRRT(const base::SpaceInformationPtr &si);
-            ~HyRRT() override;
-            void clear() override;
-            void setup() override;
-            void getPlannerData(base::PlannerData &data) const override;
-            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
-
-            /// \brief Representation of a motion in the search tree
-            class Motion
-            {
-            public:
-                /// \brief Default constructor
-                Motion() = default;
-
-                /// \brief Constructor that allocates memory for the state
-                Motion(const base::SpaceInformationPtr &si) : state(si->allocState())
+            case false:  // Flow
+                flowInputs = sampleFlowInputs_();
+                while (tFlow < randomFlowTimeMax && flowSet_(new_motion->state))
                 {
-                }
+                    base::State *intermediate_state = si_->allocState();
+                    si_->copyState(intermediate_state, previous_state);
+                    intermediate_states->push_back(intermediate_state);
+                    
+                    // printMotion(new_motion);
+                    collision = false;
+                    tFlow += flowStepLength_;
 
-                ~Motion() = default;
+                    // Find new state with flow propagation
+                    base::State *new_state = si_->allocState();
 
-                /// \brief The state contained by the motion
-                base::State *state{nullptr};
+                    new_state =
+                        this->continuousSimulator_(flowInputs, previous_state, flowStepLength_, new_state);
+                    new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tFIndex] += flowStepLength_;
 
-                /// \brief The parent motion in the exploration tree
-                Motion *parent{nullptr};
+                    if (unsafeSet_(new_state))
+                        goto nextIteration;
 
-                /// \brief Pointer to the root of the tree this motion is
-                /// contained in.
-                const base::State *root{nullptr};
-            };
+                    push_back_state(propStepStates, new_state);
 
-            /** \brief Get trajectory matrix from trajectoryMatrix_*/
-            std::vector<Motion *> getTrajectoryMatrix()
-            {
-                return trajectoryMatrix_;
-            }
+                    std::vector<double> startPoint = motion_to_vector(parent_motion->state);
+                    std::vector<double> endPoint = motion_to_vector(new_state);
 
-            /** \brief Free the memory allocated by this planner */
-            void freeMemory();
+                    double ts = startPoint[tFIndex];
+                    double tf = endPoint[tFIndex];
 
-            /** \brief Set the input range the planner is supposed to use. */
-            void setInputRange(std::vector<double> min, std::vector<double> max)
-            {
-                if (maxInputValue_.size() != minInputValue_.size())
-                {
-                    throw ompl::Exception("Max input value (maxInputValue) and min input value (minInputValue) must be "
-                                          "of the same size");
-                }
-                for (int i = 0; i < maxInputValue_.size(); i++)
-                {
-                    if (maxInputValue_[i] <= minInputValue_[i])
+                    // Place collision checker here
+
+                    si_->copyState(previous_state, new_state);
+
+                    auto collision_checking_start_time = high_resolution_clock::now();  // for planner statistics only 
+                    collision = collisionChecker_(propStepStates, jumpSet_, ts, tf, new_state, tFIndex);
+                    auto collision_checking_end_time = high_resolution_clock::now();
+                    totalCollisionTime += duration_cast<microseconds>(collision_checking_end_time - collision_checking_start_time).count();
+
+                    // If the motion encounters no collision with jump sets, then add the successful motion to the
+                    // temporary trees
+                    if (!collision)
                     {
-                        throw ompl::Exception("Max input value must be greater than or equal to min input value");
+                        si_->copyState(new_motion->state, new_state);  // Set parent state for next iterations
+                    }
+                    else
+                    {
+                        totalCollisions++;
+                        si_->copyState(new_motion->state, new_state);  // get collision state
+                    }
+
+                    if (tFlow >= randomFlowTimeMax || collision)
+                    {
+                        auto *motion = new Motion(si_);
+                        si_->copyState(motion->state, new_state);
+                        motion->parent = parent_motion;
+
+                        si_->freeState(new_state);
+                        collision_parent_motion = motion;
+                        
+                        motion->edge = intermediate_states;
+
+                        if (collision)
+                            goto jump;
+                        else {
+                            nn_->add(motion);
+                        }
+                        break;
+                    }
+                    pdef_->getGoal()->as<ompl::base::GoalState>()->getState();
+                    // Check if goal is reached. If so, escape to solution checking TODO: Consider moving out to after
+                    // the full propagation for computational efficiency
+                    if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <=
+                        tolerance_)
+                    {
+                        goto escape;
                     }
                 }
-                minInputValue_ = min;
-                maxInputValue_ = max;
+            break;
+
+        case true: // Jump
+            collision_parent_motion = parent_motion;
+        jump:
+            jumpInputs = sampleJumpInputs_();
+            base::State *new_state = si_->allocState();
+            new_state = this->discreteSimulator_(new_motion->state, jumpInputs, new_state); // changed from previous_state to new_motion->state
+            new_state->as<ompl::base::RealVectorStateSpace::StateType>()->values[tJIndex]++;
+
+                if (unsafeSet_(new_state))
+                    goto nextIteration;
+
+                si_->copyState(new_motion->state, new_state);
+
+                auto *motion = new Motion(si_);
+                si_->copyState(motion->state, new_state);
+                motion->parent = collision_parent_motion;
+
+                nn_->add(motion);
+                nn_->add(collision_parent_motion);
+                si_->freeState(new_state);
+
+                break;
+        }
+
+    escape:
+        si_->freeState(previous_state);
+        if (distanceFunc_(new_motion->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState()) <= tolerance_)
+        {
+            vector<Motion *> trajectory;
+            nn_->list(trajectory);
+            std::vector<Motion *> mpath;
+
+            double finalDistance = distanceFunc_(trajectory.back()->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState());
+            Motion *solution = new_motion;
+
+            int path_size = 0;
+
+            // Construct the path from the goal to the start by following the parent pointers
+            while (solution != nullptr)
+            {
+                mpath.push_back(solution);
+                if(solution->edge != nullptr)   // A jump motion does not contain an edge
+                    path_size += solution->edge->size() + 1; // +1 for the end state
+                // printMotion(solution);
+
+                solution = solution->parent;
             }
 
-            /** \brief Set the maximum flow time for a given propagation step. */
-            void setTm(double Tm)
+            // Create a new path object to store the solution path
+            auto path(std::make_shared<PathGeometric>(si_));
+            trajectoryMatrix_ = {};
+
+            // Reserve space for the path states
+            path->getStates().reserve(path_size);
+
+            // Add the states to the path in reverse order (from start to goal)
+            for (int i = mpath.size() - 1; i >= 0; --i)
             {
-                if (Tm <= 0)
-                {
-                    throw ompl::Exception("Maximum flow time per propagation step must be greater than 0");
-                }
-                if (!flowStepLength_)
-                {
-                    if (Tm_ < flowStepLength_)
+                // Append all intermediate states to the path, including starting state, excluding end vertex
+                if(mpath[i]->edge != nullptr) {   // A jump motion does not contain an edge
+                    for (auto state : *mpath[i]->edge)
                     {
-                        throw ompl::Exception("Maximum flow time per propagation step must be greater than or equal to "
-                                              "the length of time for each flow integration step (flowStepLength)");
+                        path->append(state);    // Need to make a new motion to append to trajectory matrix
+                        trajectoryMatrix_.push_back(state);
                     }
                 }
-                Tm_ = Tm;
             }
+            path->append(mpath[0]->state);  // append goal state to the path
+            trajectoryMatrix_.push_back(mpath[0]->state);
 
-            /** \brief Set the flow time for a given integration step, within a flow propagation step. */
-            void setFlowStepLength(double stepLength)
-            {
-                if (flowStepLength_ <= 0)
-                {
-                    throw ompl::Exception("Flow step length must be greater than 0");
-                }
-                if (!Tm_)
-                {
-                    if (Tm_ < flowStepLength_)
-                    {
-                        throw ompl::Exception("Flow step length must be less than or equal to the maximum flow time "
-                                              "per propagation step (Tm)");
-                    }
-                }
-                flowStepLength_ = stepLength;
-            }
+            // Add the solution path to the problem definition
+            pdef_->addSolutionPath(path, finalDistance > 0.0, finalDistance, getName());
+            pdef_->getSolutionPath()->as<ompl::geometric::PathGeometric>()->printAsMatrix(std::cout);
 
-            /** \brief Set distance tolerance from goal state. */
-            void setGoalTolerance(double tolerance)
-            {
-                if (tolerance < 0)
-                {
-                    throw ompl::Exception("Goal tolerance must be greater than or equal to 0");
-                }
-                tolerance_ = tolerance;
-            }
+            // To get the value of duration use the count()
+            auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
+            cout << "total duration (microseconds): " << duration.count() << endl;
+            cout << "total number of vertices: " << mpath.size() << endl;
+            cout << "total number of iterations (attempted propagation steps): " << i << std::endl; 
+            cout << "total collision checking duration (microseconds): " << totalCollisionTime << std::endl;
 
-            void setJumpSet(std::function<bool(base::State *)> jumpSet)
-            {
-                jumpSet_ = jumpSet;
-            }
+            // Return a status indicating that an exact solution has been found
+            if (finalDistance > 0.0)
+                return base::PlannerStatus::APPROXIMATE_SOLUTION;
+            else
+                return base::PlannerStatus::EXACT_SOLUTION;
+        }
+        // nextIteration:
+    }
+    return base::PlannerStatus::INFEASIBLE; // if failed to find a path within specified max number of iteratioins, then path generation has failed
+}
 
-            void setFlowSet(std::function<bool(base::State *)> flowSet)
-            {
-                flowSet_ = flowSet;
-            }
+void ompl::geometric::HyRRT::clear(void)
+{
+    Planner::clear();
+    // clear the data structures here
+}
 
-            void setUnsafeSet(std::function<bool(base::State *)> unsafeSet)
-            {
-                unsafeSet_ = unsafeSet;
-            }
+// optional, if additional setup/configuration is needed, the setup() method can be implemented
+void ompl::geometric::HyRRT::setup()
+{
+    Planner::setup();
+    tools::SelfConfig sc(si_, getName());
+    sc.configurePlannerRange(maxDistance_);
+    if (!nn_)
+        nn_.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
+    nn_->setDistanceFunction([this](const Motion *a, const Motion *b)
+                             { return ompl::geometric::HyRRT::distanceFunc_(a->state, b->state); });
+}
 
-            void setDistanceFunction(std::function<double(base::State *, base::State *)> function)
-            {
-                distanceFunc_ = function;
-            }
+void ompl::geometric::HyRRT::freeMemory()
+{
+    if (nn_)
+    {
+        std::vector<Motion *> motions;
+        nn_->list(motions);
+        for (auto &motion : motions)
+        {
+            if (motion->state != nullptr)
+                si_->freeState(motion->state);
+            delete motion;
+        }
+    }
+}
 
-            void setDiscreteSimulator(
-                std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> function)
-            {
-                discreteSimulator_ = function;
-            }
+void ompl::geometric::HyRRT::getPlannerData(base::PlannerData &data) const
+{
+    Planner::getPlannerData(data);
 
-            void setContinuousSimulator(std::function<base::State *(std::vector<double> inputs, base::State *x_cur,
-                                                                        double tFlowMax, base::State *x_new)>
-                                                function)
-            {
-                continuousSimulator_ = function;
-            }
+    vector<Motion *> motions;
+    if (nn_)
+        nn_->list(motions);
 
-            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates,
-                                                        std::function<bool(base::State *state)> obstacleSet, double ts,
-                                                        double tf, base::State *new_state, int tFIndex)>
-                                         function)
-            {
-                collisionChecker_ = function;
-            }
+    if (lastGoalMotion_ != nullptr)
+        data.addGoalVertex(base::PlannerDataVertex(lastGoalMotion_->state));
 
-            /** \brief Set the input sampling mode. See
-             * https://github.com/ompl/ompl/blob/main/src/ompl/util/RandomNumbers.h for details on each available mode.
-             */
-            void setInputSamplingMode(std::string mode)  // TODO: Add this into input sampling call
-            {
-                if (mode != "uniform01" && mode != "uniformReal" && mode != "uniformInt" && mode != "gaussian01" &&
-                    mode != "gaussian" && mode != "halfNormalReal" && mode != "halfNormalInt" &&
-                    mode != "halfNormalInt" && mode != "quarternion" && mode != "eulerRPY")
-                {
-                    inputSamplingMethod_ = "uniformReal";
-                    OMPL_WARN("Input sampling mode not recognized. Defaulting to uniformReal.");
-                }
-                else
-                {
-                    inputSamplingMethod_ = mode;
-                }
-            }
-
-            /** \brief Set a different nearest neighbors datastructure */
-            template <template <typename T> class NN>
-            void setNearestNeighbors()
-            {
-                if (nn_ && nn_->size() != 0)
-                    OMPL_WARN("Calling setNearestNeighbors will clear all states.");
-                clear();
-                nn_ = std::make_shared<NN<Motion *>>();
-                setup();
-            }
-
-            std::vector<double> motion_to_vector(base::State *state)
-            {
-                std::vector<double> motion_vector;
-                for (int i = 0; i < 9; i++)
-                {
-                    motion_vector.push_back(state->as<ompl::base::RealVectorStateSpace::StateType>()->values[i]);
-                }
-                return motion_vector;
-            }
-
-            void checkAllParametersSet()
-            {
-                if (!discreteSimulator_)
-                {
-                    throw ompl::Exception("Jump map not set");
-                }
-                if (!continuousSimulator)
-                {
-                    throw ompl::Exception("Flow map not set");
-                }
-                if (!flowSet_)
-                {
-                    throw ompl::Exception("Flow set not set");
-                }
-                if (!jumpSet_)
-                {
-                    throw ompl::Exception("Jump set not set");
-                }
-                if (!unsafeSet_)
-                {
-                    throw ompl::Exception("Unsafe set not set");
-                }
-                if (!Tm_)
-                {
-                    throw ompl::Exception("Max flow propagation time (Tm) no set");
-                }
-                if (maxInputValue_.size() == 0)
-                {
-                    throw ompl::Exception("Max input value (maxInputValue) not set");
-                }
-                if (minInputValue_.size() == 0)
-                {
-                    throw ompl::Exception("Min input value (minInputValue) not set");
-                }
-                if (!flowStepLength_)
-                {
-                    throw ompl::Exception("Flow step length (flowStepLength) not set");
-                }
-            }
-
-        protected:
-            void printMotion(Motion *motion)
-            {
-                cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   v "
-                     << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1]
-                     << "    a: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2]
-                     << "    tf: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3]
-                     << "    tj: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4]
-                     << endl;
-            }
-
-            void printState(base::State *motion)
-            {
-                // cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " <<
-                // motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
-            }
-
-            void printTree()
-            {
-                std::vector<Motion *> traj;
-                nn_->list(traj);
-                for (Motion *motion : traj)
-                {
-                    printMotion(motion);
-                }
-            }
-
-            base::StateSpacePtr setup_;
-
-            void init_tree();
-
-            void random_sample(Motion *randomMotion, std::mt19937 gen);
-
-            // The following are all customizeable parameters, and affects how the cHyRRT generates trajectories
-
-            bool checkPriority(base::State *state);
-
-            std::vector<Motion *> trajectoryMatrix_{nullptr};
-
-            /** \brief Compute distance between states, default is Euclidean distance */
-            std::function<double(base::State *state1, base::State *state2)> distanceFunc_;
-
-            /** \brief A nearest-neighbors datastructure containing the tree of motions */
-            std::shared_ptr<NearestNeighbors<Motion *>> nn_;
-
-            /** \brief The maximum flow time for a given flow propagation step. Must be set by the user */
-            double Tm_;
-
-            /** \brief The distance tolerance from the goal state for a state to be regarded as a valid final state.
-             * Default is .1 */
-            double tolerance_{.1};
-
-            double minStepLength = 1e-06;
-
-            /** \brief The flow time for a given integration step, within a flow propagation step. Must be set by user
-             */
-            double flowStepLength_;
-
-            /** \brief Minimum input value */
-            std::vector<double> minInputValue_;
-
-            /** \brief Maximum input value */
-            std::vector<double> maxInputValue_;
-
-            /** \brief Max distance, need to remove */
-            double maxDistance_{0.};
-
-            std::function<base::State *(base::State *x_cur, double u, base::State *x_new)> discreteSimulator_;
-
-            /** \brief Function that returns true if a state is in the jump set, and false if not. */
-            std::function<bool(base::State *state)> jumpSet_;
-
-            /** \brief Function that returns true if a state is in the flow set, and false if not. */
-            std::function<bool(base::State *state)> flowSet_;
-
-            /** \brief Function that returns true if a state is in the flow set, and false if not. */
-            std::function<bool(base::State *state)> unsafeSet_;
-
-            std::function<base::State *(std::vector<double> input, base::State *x_cur, double tFlowMax,
-                                        base::State *x_new)>
-                flowPropagation_;
-
-            RNG rng_;
-
-            void push_back_state(std::vector<std::vector<double>> *states_list, base::State *state)
-            {
-                ompl::base::RealVectorStateSpace::StateType *state_vec =
-                    state->as<ompl::base::RealVectorStateSpace::StateType>();
-                std::vector<double> new_state;
-                for (int i = 0; i < si_->getStateDimension(); i++)
-                    new_state.push_back(state_vec->values[i]);
-                states_list->push_back(new_state);
-            }
-
-            /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
-            std::function<bool(std::vector<std::vector<double>> *propStepStates,
-                               std::function<bool(base::State *state)> obstacleSet, double ts, double tf,
-                               base::State *new_state, int tFIndex)>
-                collisionChecker_ = [this](std::vector<std::vector<double>> *propStepStates,
-                                           std::function<bool(base::State *state)> obstacleSet, double ts, double tf,
-                                           base::State *new_state, int tFIndex) -> bool
-            {
-                base::State *previous_temp = si_->allocState();
-                base::State *temp = si_->allocState();
-                for (int i = 0; i < propStepStates->size(); i++)
-                {
-                    for (int j = 0; j < propStepStates->at(i).size(); j++)
-                    {
-                        temp->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] =
-                            propStepStates->at(i).at(j);
-                    }
-                    if (obstacleSet(temp))
-                    {
-                        if (i == 0)
-                            si_->copyState(new_state, temp);
-                        else
-                            si_->copyState(new_state, previous_temp);
-                        return true;
-                    }
-                    si_->copyState(previous_temp, temp);
-                }
-                return false;
-            };
-
-            /** \brief Name of input sampling method, default is "uniform" */
-            std::string inputSamplingMethod_{"uniform"};
-
-            /** \brief The most recent goal motion.  Used for PlannerData computation */
-            Motion *lastGoalMotion_{nullptr};
-        };
-    }  // namespace geometric
-}  // namespace ompl
-
-#endif
+    for (auto &motion : motions)
+    {
+        if (motion->parent == nullptr)
+            data.addStartVertex(base::PlannerDataVertex(motion->state));
+        else
+            data.addEdge(base::PlannerDataVertex(motion->parent->state), base::PlannerDataVertex(motion->state));
+    }
+}

@@ -1,18 +1,17 @@
 #include <ompl/base/Planner.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
-#include "../include/HyRRT.h"
-#include "ompl/base/spaces/RealVectorStateSpace.h"
+#include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
 #include "../CommonMath/Trajectory.hpp"
 #include "../CommonMath/RectPrism.hpp"
-#include "../include/polyFit.hpp"
-#include "../quartic.cpp"
+#include "../polyFit.h"
+#include "../src/quartic.cpp"
 #include "../CommonMath/RectPrism.hpp"
 #include "../CommonMath/ConvexObj.hpp"
 #include <list>
-#include "../include/HyRRT.h"
+#include "../HyRRT.h"
 
 using namespace CommonMath;
 
@@ -49,7 +48,6 @@ DetailedCollisionResult polyCollisionChecker(
 
     // First find the position halfway between the start and end time of this segment
     double midTime = (ts + tf) / 2.0;
-    std::cout << "tf: " << tf << " midtime: " << midTime << " endTime_: " << _traj.GetEndTime() << std::endl;
     Vec3 midpoint = _traj.GetValue(midTime);
 
     if (obstacle->IsPointInside(midpoint))
@@ -454,7 +452,6 @@ ompl::base::State *jumpPropagation(ompl::base::State *x_cur, std::vector<double>
 bool collisionChecker(std::vector<std::vector<double>> *propStepStates, std::function<bool(ompl::base::State *state)> obstacleSet, double ts, double tf, ompl::base::State *new_state, int tFIndex)
 {
     Trajectory _traj = polyFit3D(*propStepStates);
-    std::cout << "initial tf: " << tf << std::endl;
 
     DetailedCollisionResult leftCollisionResult = polyCollisionChecker(ts, tf, leftRectPrism, 1e-03, 0, _traj);
     DetailedCollisionResult topCollisionResult = polyCollisionChecker(ts, tf, topRectPrism, 1e-03, 0, _traj);
@@ -574,10 +571,12 @@ int main()
     ompl::base::PlannerStatus solved = cHyRRT.solve(ompl::base::timedPlannerTerminationCondition(10000));
     cout << "solution status: " << solved << endl;
 
-    std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
-    for(auto &m : trajectory) {
-        std::cout << "x: " << m->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << std::endl;
-    }
+
+    // // How to access the solution path as a C++ vector
+    // std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
+    // for(auto &m : trajectory) {
+    //     // Use m->as<ompl::base::RealVectorStateSpace::StateType>()->values[** desired index **]
+    // }
 
     // Do ROS visualization here
     // ompl::base::PathPtr &plannerData = pdef.getSolutionPath();

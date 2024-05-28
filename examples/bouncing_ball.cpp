@@ -1,18 +1,18 @@
 #include <ompl/base/Planner.h>
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/base/GoalTypes.h>
-#include "../include/HyRRT.h"
+#include "../HyRRT.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include <ompl/control/SimpleSetup.h>
 #include <ompl/base/goals/GoalState.h>
 #include "../CommonMath/Trajectory.hpp"
 #include "../CommonMath/RectPrism.hpp"
-#include "../include/polyFit.hpp"
-#include "../quartic.cpp"
+#include "../polyFit.h"
+#include "../src/quartic.cpp"
 #include "../CommonMath/RectPrism.hpp"
 #include "../CommonMath/ConvexObj.hpp"
 #include <list>
-#include "../include/HyRRT.h"
+#include "../HyRRT.h"
 
 using namespace CommonMath;
 
@@ -29,16 +29,11 @@ bool jumpSet(ompl::base::State *state)
     double velocity = state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
     double acceleration_cur = state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
     double pos_cur = state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
-    // cout << "pose current: " << pos_cur << "            vel cur: " << velocity << "           accel cur: " << acceleration_cur << endl;
 
     if (pos_cur <= 0 && velocity <= 0)
     {
         return true;
     }
-    // else if (pos_cur >= -0.1)
-    // { // TODO: Make 0?
-    //     return false;
-    // }
     else
     {
         return false;
@@ -65,8 +60,6 @@ ompl::base::State *flowPropagation(std::vector<double> inputs, ompl::base::State
     double pos_cur = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
     double tFlow_cur = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[3];
     double tJump_cur = x_cur->as<ompl::base::RealVectorStateSpace::StateType>()->values[4];
-    // cout << "flowing" << endl;
-    // double input_accel = input->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
 
     double v = velocity + (acceleration_cur)*tFlow;                               // v = v0 + at
     double x = pos_cur + velocity * tFlow + (acceleration_cur) * pow(tFlow, 2) / 2; // x = v0 * t + 1/2(at^2)
@@ -150,11 +143,8 @@ int main()
     cHyRRT.setJumpSet(jumpSet);
     cHyRRT.setTm(0.5);
     cHyRRT.setFlowStepLength(0.001);
-        cout << "Made it this far" << std::endl;
-
     cHyRRT.setFlowInputRange(std::vector<double>{-9.81}, std::vector<double>{-9.81});   // If input is a single value, only that value will every be used
     cHyRRT.setJumpInputRange(std::vector<double>{0}, std::vector<double>{0});
-    cout << "Made it this far" << std::endl;
     cHyRRT.setUnsafeSet(unsafeSet);
 
     // attempt to solve the planning problem within one second of
@@ -162,10 +152,11 @@ int main()
     ompl::base::PlannerStatus solved = cHyRRT.solve(ompl::base::timedPlannerTerminationCondition(10000));
     cout << "solution status: " << solved << endl;
 
-    std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
-    for(auto &m : trajectory) {
-        std::cout << "x: " << m->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << std::endl;
-    }
+    // // How to access the solution path as a C++ vector
+    // std::vector<ompl::geometric::HyRRT::Motion *> trajectory = cHyRRT.getTrajectoryMatrix();
+    // for(auto &m : trajectory) {
+    //     // Use m->as<ompl::base::RealVectorStateSpace::StateType>()->values[** desired index **]
+    // }
 
     // Do ROS visualization here
     // ompl::base::PathPtr &plannerData = pdef.getSolutionPath();

@@ -1,8 +1,0 @@
-[
-{
-  "directory": "C:/Users/User/Documents/GitHub/cHyRRT/build",
-  "command": "C:\\msys64\\mingw64\\bin\\c++.exe    -O3 -o CMakeFiles\\cHyRRT.dir\\main.cpp.obj -c C:\\Users\\User\\Documents\\GitHub\\cHyRRT\\main.cpp",
-  "file": "C:/Users/User/Documents/GitHub/cHyRRT/main.cpp",
-  "output": "CMakeFiles/cHyRRT.dir/main.cpp.obj"
-}
-]

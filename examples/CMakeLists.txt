@@ -10,3 +10,4 @@ target_link_libraries(bouncing_ball HyRRT ${OMPL_LIBRARIES})
 
 # Include necessary directories
 include_directories(${OMPL_INCLUDE_DIRS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")

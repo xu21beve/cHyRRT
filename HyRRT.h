@@ -117,7 +117,7 @@ namespace ompl
             };
 
             /** \brief Get trajectory matrix from trajectoryMatrix_*/
-            std::vector<Motion *> getTrajectoryMatrix() {
+            std::vector<base::State *> getTrajectoryMatrix() {
                 return trajectoryMatrix_;
             }
 
@@ -134,10 +134,8 @@ namespace ompl
                 }
                 for (int i = 0; i < size; i++)
                 {
-                    std::cout << i << std::endl;
                     if (min.at(0) > max.at(0))
                     {
-                        std::cout << i << ": " << "min value: " << min.at(i) << " max: " << max.at(i) << std::endl;
                         throw ompl::Exception("Max input value must be greater than or equal to min input value");
                     }
                 }
@@ -477,7 +475,7 @@ namespace ompl
 
             bool checkPriority(base::State *state);
 
-            std::vector<Motion *> trajectoryMatrix_{nullptr};
+            std::vector<base::State *> trajectoryMatrix_{nullptr};
 
             /** \brief Compute distance between states, default is Euclidean distance */
             std::function<double(base::State *state1, base::State *state2)> distanceFunc_;
@@ -551,7 +549,6 @@ namespace ompl
 
 
            std::function<double (int i)> getRandFlowInput_ = [this](int i) {
-                cout << "min: " << minFlowInputValue_[i] << " max: " << maxFlowInputValue_[i] << " i: " << i << std::endl;
                return randomSampler_->uniformReal(minFlowInputValue_[i], maxFlowInputValue_[i]);
            };
 

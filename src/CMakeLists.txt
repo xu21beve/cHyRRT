@@ -1,4 +1,3 @@
-find_package(eigen3 REQUIRED)
 find_package(ompl REQUIRED)
 
 add_library(HyRRT HyRRT.cpp)
@@ -14,9 +13,9 @@ link_libraries(${Boost_LIBRARIES})
 
 # add_library(RapidQuadcopterTrajectories RapidTrajectoryGenerator.cpp SingleAxisTrajectory.cpp)
 add_library(Quartic quartic.cpp)
-add_library(ompl/HyRRT HyRRT.cpp)
 
 include_directories(${HyRRT_SOURCE_DIR}) # Include the directory where HyRRT.h is located
 
 # Include necessary directories
 include_directories(${OMPL_INCLUDE_DIRS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
