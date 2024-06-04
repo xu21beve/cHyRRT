@@ -248,7 +248,7 @@ namespace ompl
                 continuousSimulator_ = function;
             }
 
-            void setCollisionChecker(std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> function)
+            void setCollisionChecker(std::function<bool(std::vector<base::State *> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> function)
             {
                 collisionChecker_ = function;
             }
@@ -577,26 +577,19 @@ namespace ompl
             };
 
             /** \brief Collision checker. Optional is point-by-point collision checking using the jump set. */
-            std::function<bool(std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_ =
-                [this](std::vector<std::vector<double>> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex) -> bool
+            std::function<bool(std::vector<base::State *> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex)> collisionChecker_ =
+                [this](std::vector<base::State *> *propStepStates, std::function<bool(base::State *state)> obstacleSet, double ts, double tf, base::State *new_state, int tFIndex) -> bool
             {
-                base::State *previous_temp = si_->allocState();
-                base::State *temp = si_->allocState();
                 for (int i = 0; i < propStepStates->size(); i++)
                 {
-                    for (int j = 0; j < propStepStates->at(i).size(); j++)
-                    {
-                        temp->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = propStepStates->at(i).at(j);
-                    }
-                    if (obstacleSet(temp))
+                    if (obstacleSet(propStepStates->at(i)))
                     {
                         if (i == 0)
-                            si_->copyState(new_state, temp);
+                            si_->copyState(new_state, propStepStates->at(i));
                         else
-                            si_->copyState(new_state, previous_temp);
+                            si_->copyState(new_state, propStepStates->at(i - 1));
                         return true;
                     }
-                    si_->copyState(previous_temp, temp);
                 }
                 return false;
             };

@@ -113,8 +113,8 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
         auto *collision_parent_motion = nn_->nearest(random_motion);
 
         bool collision = false;
-        std::vector<std::vector<double>> *propStepStates = new std::vector<std::vector<double>>;
-        push_back_state(propStepStates, previous_state);
+        // std::vector<std::vector<double>> *propStepStates = new std::vector<std::vector<double>>;
+        // push_back_state(propStepStates, previous_state);
         std::vector<base::State *> *intermediate_states = new std::vector<base::State *>;
 
         // Run either flow or jump propagation until propagation step is completed or collision occurs  // TODO: Add
@@ -142,7 +142,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                     if (unsafeSet_(new_state))
                         goto nextIteration;
 
-                    push_back_state(propStepStates, new_state);
+                    // push_back_state(propStepStates, new_state);
 
                     std::vector<double> startPoint = motion_to_vector(parent_motion->state);
                     std::vector<double> endPoint = motion_to_vector(new_state);
@@ -155,7 +155,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                     si_->copyState(previous_state, new_state);
 
                     auto collision_checking_start_time = high_resolution_clock::now();  // for planner statistics only 
-                    collision = collisionChecker_(propStepStates, jumpSet_, ts, tf, new_state, tFIndex);
+                    collision = collisionChecker_(intermediate_states, jumpSet_, ts, tf, new_state, tFIndex);
                     auto collision_checking_end_time = high_resolution_clock::now();
                     totalCollisionTime += duration_cast<microseconds>(collision_checking_end_time - collision_checking_start_time).count();
 
