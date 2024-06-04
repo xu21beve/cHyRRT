@@ -116,6 +116,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
         // std::vector<std::vector<double>> *propStepStates = new std::vector<std::vector<double>>;
         // push_back_state(propStepStates, previous_state);
         std::vector<base::State *> *intermediate_states = new std::vector<base::State *>;
+        intermediate_states->push_back(previous_state);
 
         // Run either flow or jump propagation until propagation step is completed or collision occurs  // TODO: Add
         // other case for both, then choose randomly, using user-defined threshold for relative probabilities
@@ -124,11 +125,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
             case false:  // Flow
                 flowInputs = sampleFlowInputs_();
                 while (tFlow < randomFlowTimeMax && flowSet_(new_motion->state))
-                {
-                    base::State *intermediate_state = si_->allocState();
-                    si_->copyState(intermediate_state, previous_state);
-                    intermediate_states->push_back(intermediate_state);
-                    
+                {                    
                     collision = false;
                     tFlow += flowStepLength_;
 
@@ -143,6 +140,10 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                         goto nextIteration;
 
                     // push_back_state(propStepStates, new_state);
+                    base::State *intermediate_state = si_->allocState();
+                    si_->copyState(intermediate_state, new_state);
+                    intermediate_states->push_back(intermediate_state);
+
 
                     std::vector<double> startPoint = motion_to_vector(parent_motion->state);
                     std::vector<double> endPoint = motion_to_vector(new_state);
@@ -276,10 +277,10 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
             // To get the value of duration use the count()
             auto duration =
                 std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
-            cout << "total duration (microseconds): " << duration.count() << endl;
-            cout << "total number of vertices: " << mpath.size() << endl;
-            cout << "total number of iterations (attempted propagation steps): " << i << std::endl; 
-            cout << "total collision checking duration (microseconds): " << totalCollisionTime << std::endl;
+            std::cout << "total duration (microseconds): " << duration.count() << endl;
+            std::cout << "total number of vertices: " << mpath.size() << endl;
+            std::cout << "total number of iterations (attempted propagation steps): " << i << std::endl; 
+            std::cout << "total collision checking duration (microseconds): " << totalCollisionTime << std::endl;
 
             // Return a status indicating that an exact solution has been found
             if (finalDistance > 0.0)
