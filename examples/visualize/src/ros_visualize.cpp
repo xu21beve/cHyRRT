@@ -15,7 +15,7 @@
 
 std::vector<std::vector<double>> make_matrix()
 {
-    std::ifstream file(".txt");
+    std::ifstream file("src/points.txt");
     std::string line;
     std::vector<std::vector<double>> matrix;
     while (std::getline(file, line))
@@ -30,7 +30,7 @@ std::vector<std::vector<double>> make_matrix()
         matrix.push_back(row);
     }
 
-    std::cout << matrix.size() << std::endl;
+    std::cout << "Number of points: " << matrix.size() << std::endl;
     return matrix;
 }
 
@@ -49,11 +49,6 @@ public:
     }
 
 private:
-    // void populateObstacles(rclcpp::Publisher<Marker>::SharedPtr marker_pub)
-    // {
-        
-    // }
-
     void publishPoints(std::vector<std::vector<double>> matrix)
     {
         auto marker_array_msg = std::make_shared<visualization_msgs::msg::MarkerArray>();
