@@ -1,10 +1,17 @@
-#include <rclcpp/rclcpp.hpp>
-#include "visualization_msgs/msg/marker_array.hpp"
-#include "std_msgs/msg/string.hpp"
-#include <geometry_msgs/msg/point.hpp>
-#include <geometry_msgs/msg/pose2_d.hpp>
-#include <visualization_msgs/msg/marker.hpp>
-// #include "../include/rrtImpl.h"
+/**
+ * @brief Publishes a MarkerArray of points and Markers for obstacles to ROS topics.
+ *
+ * This class reads point data from a file, creates a MarkerArray of points and Markers for obstacles, and publishes them to ROS topics at a regular interval.
+ *
+ * The point data is read from a file specified by the `points.txt` filename. The indices of the x, y, and (optional) z coordinates are read from a file specified by the `coordinate_indices.txt` filename.
+ *
+ * The MarkerArray contains a Marker for each point, with the first and last points displayed as cubes and the rest as spheres. The Markers are published to the `point_matrix` topic.
+ *
+ * The Markers for obstacles are published to the `obstacles` topic. The obstacles are defined as four cubes with fixed positions and dimensions.
+ *
+ * The publishing is done on a timer that fires every 1 second.
+ */
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -13,9 +20,18 @@
 #include <sstream>
 #include <vector>
 
-std::vector<std::vector<double>> make_matrix()
+// It is alright if the following imports throw errors in your IDE, since they are not built by a CMake compiler, but rather by colcon.
+#include <rclcpp/rclcpp.hpp>
+#include "visualization_msgs/msg/marker_array.hpp"
+#include "std_msgs/msg/string.hpp"
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/pose2_d.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+
+// Function to read a file and store its contents as a matrix
+std::vector<std::vector<double>> read_file_as_matrix(std::string file_name)
 {
-    std::ifstream file("src/points.txt");
+    std::ifstream file(file_name);
     std::string line;
     std::vector<std::vector<double>> matrix;
     while (std::getline(file, line))
@@ -30,32 +46,38 @@ std::vector<std::vector<double>> make_matrix()
         matrix.push_back(row);
     }
 
-    std::cout << "Number of points: " << matrix.size() << std::endl;
+    std::cout << "Number of rows/points: " << matrix.size() << std::endl;
     return matrix;
 }
 
+// Class to publish the trajectory and obstacles as a point matrix and obstacles as ROS markers
 class PointMatrixPublisher : public rclcpp::Node
 {
 public:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub;
     rclcpp::TimerBase::SharedPtr timer_;
-    PointMatrixPublisher(std::vector<std::vector<double>> matrix) : Node("point_matrix_publisher")
+    PointMatrixPublisher(std::vector<std::vector<double>> matrix, std::vector<double> index_matrix) : Node("point_matrix_publisher")
     {
+        // Create publishers for point matrix and obstacles
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("point_matrix", 10);
         marker_pub = this->create_publisher<visualization_msgs::msg::Marker>("obstacles", 10);
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), [this, matrix]()
-                                         { this->publishPoints(matrix); });
+        
+        // Create a timer to publish points periodically
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), [this, matrix, index_matrix]()
+                                         { this->publishPoints(matrix, index_matrix); });
     }
 
 private:
-    void publishPoints(std::vector<std::vector<double>> matrix)
+    // Function to publish points and obstacles as ROS markers
+    void publishPoints(std::vector<std::vector<double>> matrix, std::vector<double> index_matrix)
     {
         auto marker_array_msg = std::make_shared<visualization_msgs::msg::MarkerArray>();
 
         size_t rows = matrix.size();
 
-        visualization_msgs::msg::Marker marker, lines;
+        visualization_msgs::msg::Marker marker,
+            lines;
         marker.header.frame_id = "map"; // Change to your desired frame
         lines.header.frame_id = "map";
 
@@ -70,14 +92,16 @@ private:
             marker.id = row;
             lines.id = row + 3102;
 
-            marker.pose.position.x = matrix[row][3]; // Assuming x-coordinate is in the first column
-            marker.pose.position.y = matrix[row][0]; // Assuming y-coordinate is the row index
-            marker.pose.position.z = 0.0;
+            // Set the position of the marker based on the matrix and index_matrix
+            marker.pose.position.x = matrix[row][index_matrix[0]];
+            marker.pose.position.y = matrix[row][index_matrix[1]];
+            marker.pose.position.z = index_matrix.size() > 2 ? matrix[row][index_matrix[2]] : 0.0; // Assuming z-coordinate is in the third column, so if there are only two columns, then z-coordinate is 0.
+            marker.action = visualization_msgs::msg::Marker::ADD;
 
+            // Set the marker type and color based on the row index
             if (row == 0)
             {
                 marker.type = visualization_msgs::msg::Marker::CUBE;
-                marker.action = visualization_msgs::msg::Marker::ADD;
                 marker.color.a = 1.0;
                 marker.color.r = 0.0;
                 marker.color.g = 1.0;
@@ -86,84 +110,34 @@ private:
                 marker.scale.y = 0.15;
                 marker.scale.z = 0.05;
             }
+            else if (row == rows - 1)
+            {
+                marker.type = visualization_msgs::msg::Marker::CUBE;
+                marker.color.a = 1.0;
+                marker.color.r = 0.7;
+                marker.color.g = 0.0;
+                marker.color.b = 1.0;
+                marker.scale.x = 0.15;
+                marker.scale.y = 0.15;
+                marker.scale.z = 0.05;
+            }
             else
             {
                 marker.type = visualization_msgs::msg::Marker::SPHERE;
-                marker.action = visualization_msgs::msg::Marker::ADD;
                 marker.scale.x = 0.05;
                 marker.scale.y = 0.05;
                 marker.scale.z = 0.05;
-                if (row > 10) {
-                    marker.color.a = 0.5;
-                    marker.color.r = 1.0;
-                    marker.color.g = 1.0;
-                    marker.color.b = 1.0;
-                }
-                else if(row ==10) {
-                    marker.type = visualization_msgs::msg::Marker::CUBE;
-                    marker.color.a = 1.0;
-                    marker.color.r = 0.7;
-                    marker.color.g = 0.0;
-                    marker.color.b = 1.0;
-                    marker.scale.x = 0.15;
-                    marker.scale.y = 0.15;
-                    marker.scale.z = 0.05;
-                }
-                else {
-                    marker.type = visualization_msgs::msg::Marker::CUBE;
-                    marker.scale.x = 0.10;
-                    marker.scale.y = 0.10;
-                    marker.scale.z = 0.10;
-                    if(row == 4 || row == 5 || row == 7 || row== 8) {
-                        marker.color.a = 1.0;
-                        marker.color.r = 1.0;
-                        marker.color.g = 0.0;
-                        marker.color.b = 0.0;
-                    }
-                    else {
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.0;
-                        marker.color.g = 0.0;
-                        marker.color.b = 1.0;
-                    }
-                }
-                // else if(matrix[row][1] < 1.5 && matrix[row][1] > 1.0 && matrix[row][0] < 4.5){
-                //     marker.color.a = 0.0;
-                //     marker.color.r = 1.0;
-                //     marker.color.g = 1.0;
-                //     marker.color.b = 1.0;
-                // }
-                // else {
-                    
-                // }
-                
+                marker.color.a = 0.5;
+                marker.color.r = 1.0;
+                marker.color.g = 1.0;
+                marker.color.b = 1.0;
             }
-
-            // if (matrix[row][0] < 0.0 && row != rows - 1)
-            // {
-            //     std::cout << "line added" << std::endl;
-            //     lines.type = visualization_msgs::msg::Marker::LINE_STRIP;
-            //     lines.action = visualization_msgs::msg::Marker::ADD;
-            //     lines.color.a = 1.0;
-            //     lines.color.r = 1.0;
-            //     lines.color.g = 0.0;
-            //     lines.color.b = 0.0;
-            //     lines.scale.x = 0.05;
-
-            //     geometry_msgs::msg::Point p1, p2;
-            //     p1.x = matrix[row][0];
-            //     p1.y = matrix[row][1];
-
-            //     p2.x = matrix[row + 1][0];
-            //     p2.y = matrix[row + 1][1];
-
-            //     lines.points.push_back(p1);
-            //     lines.points.push_back(p2);
-            // }
 
             marker_array_msg->markers.push_back(marker);
             marker_array_msg->markers.push_back(lines);
         }
+
+        // Define and publish obstacles as ROS markers
         visualization_msgs::msg::Marker obs1, obs2, obs3, obs4;
         rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("talker");
         rclcpp::Time now = node->get_clock()->now();
@@ -177,11 +151,12 @@ private:
         obs1.lifetime = obs2.lifetime = obs3.lifetime = obs4.lifetime = lifetime_time;
         obs1.action = obs2.action = obs3.action = obs4.action = visualization_msgs::msg::Marker::ADD;
 
-        obs1.id = 0; // initialized at beginning
-        obs2.id = 1; // initialized after 1500 msgs
-        obs3.id = 2; // initialized after 900 msgs
-        obs4.id = 3; // initialized after _____ msgs
+        obs1.id = 0;
+        obs2.id = 1;
+        obs3.id = 2;
+        obs4.id = 3;
 
+        // Set the dimensions and positions of the obstacles
         obs1.scale.x = obs2.scale.x = 4.5;
         obs1.scale.y = obs2.scale.y = 0.5;
         obs3.scale.y = 1;
@@ -229,13 +204,10 @@ private:
         obs4.color.a = 1;
         obs4.color.r = obs4.color.g = obs4.color.b = 255.0f;
 
+        // Comment out these next three lines if you are running the boucning_ball visualization
         marker_pub->publish(obs1);
         marker_pub->publish(obs2);
         marker_pub->publish(obs3);
-
-        // obsVec.push_back(obs1);
-        // obsVec.push_back(obs2);
-        // obsVec.push_back(obs3);
 
         marker_pub_->publish(*marker_array_msg);
     }
@@ -245,11 +217,11 @@ int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
 
-    // Assuming you have a matrix named "matrix" with appropriate dimensions
-    std::vector<std::vector<double>> matrix = make_matrix();
-    // populateRviz(publisher);
-    rclcpp::spin(std::make_shared<PointMatrixPublisher>(matrix));
-    // rclcpp::shutdown();
+    // Read the coordinate indices and points from files
+    std::vector<double> index_matrix = read_file_as_matrix("coordinate_indices.txt")[0];
+    std::vector<std::vector<double>> matrix = read_file_as_matrix("src/points.txt");
 
+    // Create and spin the PointMatrixPublisher node
+    rclcpp::spin(std::make_shared<PointMatrixPublisher>(matrix, index_matrix));
     return 0;
 }
