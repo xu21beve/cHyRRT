@@ -450,12 +450,12 @@ namespace ompl
         protected:
             void printMotion(Motion *motion)
             {
-                cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   v " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    a: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    tf: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    tj: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << endl;
+                std::cout << "x1: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   v " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    a: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    tf: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    tj: " << motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << endl;
             }
 
             void printState(base::State *motion)
             {
-                cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
+                std::cout << "x1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] << "   x2 " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] << "    v1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[2] << "    v2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[3] << "    a1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[4] << "      a2: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[5] << "      tFlow: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[6] << "      tJump: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[7] << "      u1: " << motion->as<ompl::base::RealVectorStateSpace::StateType>()->values[8] << endl;
             }
 
             void printTree()
@@ -541,6 +541,9 @@ namespace ompl
 
             /** \brief Random sampler for the input. Default constructor always seeds a different value, and returns a uniform real distribution. */
             ompl::RNG *randomSampler_ = new ompl::RNG();
+
+            /** \brief Construct the path, starting at the last edge. */
+            base::PlannerStatus construct_path(Motion *last_motion);
 
             /** \brief Random sampler for the full vector of flow input. */
             std::function<std::vector<double>()> sampleFlowInputs_ = [this]()
