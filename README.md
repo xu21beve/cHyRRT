@@ -77,22 +77,32 @@ This repository provides the implementation of **HyRRT** in C++, compatible with
 
 7. Use ROS RViz2 to visualize the path.
 
-  - For the bouncing ball or multicopter examples:
+  - Ensure that you have ROS Humble and colcon properly installed.
+  - Navigate to the examples folder.
     ```
-     ./build/example/ros2_vizualize
+     cd examples/visualize
     ```
-
+  - If you would like to visualize multicopter example with obstacles, uncomment lines 208-210
+  - Paste the trajectory matrix output from running `bouncing_ball.cpp`, `multicopter.cpp`, or any other implementation of `HyRRT` into `points.txt`.
+  - Run rosrun.bash, and follow the instructions within the terminal. Note that this visualization is limited to three dimentions. 
+    ```
+     ./rosrun.bash
+    ```
     ***Include different version for different Operating Systems...***
 
 ## 1. <span id="1">Document
 
-The overall file structure is shown below.
+The overall modifiable file structure is shown below.
 ```
 /root_directory
 ├── HyRRT.h
 ├── yourOtherFiles.cpp
 └── src
     ├── HyRRT.cpp
+    └── yourSrcFiles.cpp
+└── examples
+    ├── bouncing_ball.cpp
+    ├── multicopter.cpp
     └── yourSrcFiles.cpp
 ```
 
@@ -109,7 +119,7 @@ For more information about the project's customizeable parameters, please refer 
 |Yes| flowSet_ | Function that returns true if a state is in the flow set, and false if not. (std::function<bool(ompl::base::State *)>)
 |No| unsafeSet_ | Function that returns true if a state is in the unsafe set, and false if not. (std::function<bool(ompl::base::State )>)
 |No| distanceFunc_ | Function that computes distance between states, default is Euclidean distance. (std::function<double(ompl::base::State *, ompl::base::State *)>)
-|Yes| discreteSimulator_ | Jump map for propagating a state once. (std::function<ompl::base::State *(ompl::base::State *x_cur, double u, ompl::base::State *x_new)>
+|Yes| discreteSimulator_ | Jump map for propagating a state once. (std::function<ompl::base::State *(ompl::base::State *x_cur, double u, ompl::base::State *x_new)>)
 |Yes| continuousSimulator_ | Flow map for propagating a state over the given flow time. (std::function<base::State *(std::vector<double> input, ompl::base::State *x_cur, double Tm_rand, ompl::base::State *x_new)>)
 |No| collisionChecker_ | Function that returns true and modifies the state if collides into the obstacleSet. Default is point-by-point collision checking using the jump set. Refer to **HyRRT.h** for method signature. 
 

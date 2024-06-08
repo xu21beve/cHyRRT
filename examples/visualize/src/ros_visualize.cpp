@@ -205,9 +205,9 @@ private:
         obs4.color.r = obs4.color.g = obs4.color.b = 255.0f;
 
         // Comment out these next three lines if you are running the boucning_ball visualization
-        marker_pub->publish(obs1);
-        marker_pub->publish(obs2);
-        marker_pub->publish(obs3);
+        // marker_pub->publish(obs1);
+        // marker_pub->publish(obs2);
+        // marker_pub->publish(obs3);
 
         marker_pub_->publish(*marker_array_msg);
     }
