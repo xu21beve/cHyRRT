@@ -83,7 +83,7 @@ This repository provides the implementation of **HyRRT** in C++, compatible with
      cd examples/visualize
     ```
   - If you would like to visualize multicopter example with obstacles, uncomment lines 208-210
-  - Paste the trajectory matrix output from running `bouncing_ball.cpp`, `multicopter.cpp`, or any other implementation of `HyRRT` into `points.txt`.
+  - Paste the trajectory matrix output from running `bouncing_ball.cpp`, `multicopter.cpp`, or any other implementation of HyRRT into `points.txt`.
   - Run rosrun.bash, and follow the instructions within the terminal. Note that this visualization is limited to three dimentions. 
     ```
      ./rosrun.bash
