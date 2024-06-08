@@ -577,8 +577,4 @@ int main()
     // for(auto &m : trajectory) {
     //     // Use m->as<ompl::base::RealVectorStateSpace::StateType>()->values[** desired index **]
     // }
-
-    // Do ROS visualization here
-    // ompl::base::PathPtr &plannerData = pdef.getSolutionPath();
-    // cHyRRT.getPlannerData(plannerData);
 }
