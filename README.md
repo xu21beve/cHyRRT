@@ -136,10 +136,7 @@ For more information about the project's available random sampling distributions
 ## <span id="2">02. Acknowledgments
 * Our collision checker in the multicopter (collision-resilient drone) example are from UC Berkeley's HiPeRLab publication on [Exploiting collisions for sampling-based multicopter motion planning](https://doi.org/10.48550/arXiv.2011.04091). Tools in the CommonMath and Quartic directories are from UC Berkeley's HiPeRLab's [agri-fly repository](https://github.com/muellerlab/agri-fly). 
 
-## <span id="3">03. License
 
-The source code is released under [MIT](https://www.mit.edu/~amini/LICENSE.md) license.
-
-## <span id="4">04. Maintenance
+## <span id="3">03. Maintenance
 
 Feel free to contact us if you have any question.
