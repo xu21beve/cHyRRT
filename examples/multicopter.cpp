@@ -451,11 +451,10 @@ ompl::base::State *jumpPropagation(ompl::base::State *x_cur, std::vector<double>
 
 bool collisionChecker(std::vector<ompl::base::State *> *propStepStates, std::function<bool(ompl::base::State *state)> obstacleSet, double ts, double tf, ompl::base::State *new_state, int tFIndex)
 {
-    // Trajectory _traj = polyFit3D(*propStepStates);
     std::vector<std::vector<double>> *propStepStatesDouble = new std::vector<std::vector<double>>();
-    std::vector<double> row;
     for (int i = 0; i < propStepStates->size(); i++)
     {
+        std::vector<double> row;
         for (int j = 0; j < 10; j++) {
             row.push_back(propStepStates->at(i)->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
         }
@@ -490,7 +489,6 @@ bool collisionChecker(std::vector<ompl::base::State *> *propStepStates, std::fun
         run = false;
     }
 
-    // No entiendo result below
     bool collision = run && trueCollisionResult.collisionType == Collision;
     std::vector<double> collision_point;
 

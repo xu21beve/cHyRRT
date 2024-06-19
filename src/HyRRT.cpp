@@ -304,13 +304,13 @@ base::PlannerStatus ompl::geometric::HyRRT::constructPath(Motion *last_motion) {
   path->append(mpath[0]->state); // append goal state to the path
   trajectoryMatrix_.push_back(mpath[0]->state);
 
+  // Print the number of vertices in the trajectory
+  std::cout << "total number of vertices: " << mpath.size() << endl;
+
   // Add the solution path to the problem definition
   pdef_->addSolutionPath(path, finalDistance > 0.0, finalDistance, getName());
   pdef_->getSolutionPath()->as<ompl::geometric::PathGeometric>()->printAsMatrix(
       std::cout);
-
-  // Print the number of vertices in the trajectory
-  std::cout << "total number of vertices: " << mpath.size() << endl;
 
   // Return a status indicating that an exact solution has been found
   if (finalDistance > 0.0)
