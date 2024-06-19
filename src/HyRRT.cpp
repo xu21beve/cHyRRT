@@ -120,8 +120,14 @@ nextIteration:
     std::vector<std::vector<double>> *propStepStates =
         new std::vector<std::vector<double>>;
     pushBackState(propStepStates, previousState);
+
+    // base::State *temp = si_->allocState();
     std::vector<base::State *> *intermediateStates =
         new std::vector<base::State *>;
+
+    base::State *temp = si_->allocState();
+    si_->copyState(temp, previousState);
+    intermediateStates->push_back(temp);
 
     // ===== Run Flow or Jump Propagation =====
     switch (priority) {
@@ -129,9 +135,9 @@ nextIteration:
       flowInputs = sampleFlowInputs_();
       while (tFlow < randomFlowTimeMax && flowSet_(newMotion->state)) {
         // ===== Allocate and Add Intermediate State =====
-        base::State *intermediateState = si_->allocState();
-        si_->copyState(intermediateState, previousState);
-        intermediateStates->push_back(intermediateState);
+        // base::State *intermediateState = si_->allocState();
+        // si_->copyState(intermediateState, previousState);
+        // intermediateStates->push_back(intermediateState);
 
         tFlow += flowStepDuration_;
 
@@ -145,7 +151,10 @@ nextIteration:
         if (unsafeSet_(newState))
           goto nextIteration;
 
-        pushBackState(propStepStates, newState);
+        // pushBackState(propStepStates, newState);
+        base::State *intermediateState = si_->allocState();
+        si_->copyState(intermediateState, newState);
+        intermediateStates->push_back(intermediateState);
 
         std::vector<double> startPoint = stateToVector(parentMotion->state);
         std::vector<double> endPoint = stateToVector(newState);
@@ -158,8 +167,9 @@ nextIteration:
         // ===== Collision Checking =====
         auto collision_checking_start_time =
             high_resolution_clock::now(); // for planner statistics only
-        collision = collisionChecker_(propStepStates, jumpSet_, ts, tf,
-                                      newState, TF_INDEX);
+        // collision = collisionChecker_(propStepStates, jumpSet_, ts, tf,
+        //                               newState, TF_INDEX);
+        collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf, newState, TF_INDEX);
         auto collision_checking_end_time = high_resolution_clock::now();
         totalCollisionTime +=
             duration_cast<microseconds>(collision_checking_end_time -

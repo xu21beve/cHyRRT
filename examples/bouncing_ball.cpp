@@ -142,7 +142,7 @@ int main()
     cHyRRT.setFlowSet(flowSet);
     cHyRRT.setJumpSet(jumpSet);
     cHyRRT.setTm(0.5);
-    cHyRRT.setFlowStepLength(0.001);
+    cHyRRT.setFlowStepDuration(0.001);
     cHyRRT.setFlowInputRange(std::vector<double>{-9.81}, std::vector<double>{-9.81});   // If input is a single value, only that value will every be used
     cHyRRT.setJumpInputRange(std::vector<double>{0}, std::vector<double>{0});
     cHyRRT.setUnsafeSet(unsafeSet);
