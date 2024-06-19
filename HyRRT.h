@@ -546,13 +546,7 @@ protected:
           [this](std::vector<base::State *> *propStepStates,
                  std::function<bool(base::State *state)> obstacleSet, double ts,
                  double tf, base::State *newState, int tFIndex) -> bool {
-    // base::State *previousTemp = si_->allocState();
-    // base::State *temp = si_->allocState();
     for (int i = 0; i < propStepStates->size(); i++) {
-      // for (int j = 0; j < propStepStates->at(i).size(); j++) {
-      //   temp->as<base::RealVectorStateSpace::StateType>()->values[j] =
-      //       propStepStates->at(i).at(j);
-      // }
       if (obstacleSet(propStepStates->at(i))) {
         if (i == 0)
           si_->copyState(newState, propStepStates->at(i));
@@ -560,7 +554,6 @@ protected:
           si_->copyState(newState, propStepStates->at(i - 1));
         return true;
       }
-      // si_->copyState(previousTemp, temp);
     }
     return false;
   };
