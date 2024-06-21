@@ -563,6 +563,9 @@ protected:
 
   /** \brief Name of input sampling method, default is "uniform" */
   std::vector<double> inputSamplingParameters_{};
+
+  /** \brief State sampler */
+  base::StateSamplerPtr sampler_;
 };
 } // namespace geometric
 } // namespace ompl

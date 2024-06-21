@@ -37,11 +37,11 @@ void ompl::geometric::HyRRT::initTree(void) {
 
 void ompl::geometric::HyRRT::randomSample(Motion *randomMotion,
                                           std::mt19937 gen) {
-  base::State *rstate = randomMotion->state;
+  // base::State *rstate = randomMotion->state;
 
-  base::StateSamplerPtr sampler = si_->allocStateSampler();
+  sampler_ = si_->allocStateSampler();
   // Replace later with the ompl sampler, for now leave as custom
-  sampler->sampleUniform(rstate);
+  sampler_->sampleUniform(randomMotion->state);
 }
 
 base::PlannerStatus
@@ -61,8 +61,8 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
   // Initialize variables for telemetry
   double totalCollisionTime = 0.0;
   int totalCollisions = 0;
-  const unsigned int TF_INDEX = si_->getStateDimension() - 2;
-  const unsigned int TJ_INDEX = si_->getStateDimension() - 1;
+  const unsigned int TF_INDEX = si_->getStateDimension() - 2; // Second to last column
+  const unsigned int TJ_INDEX = si_->getStateDimension() - 1; // Last column
 
   // Add start motions to the tree
   while (const base::State *st = pis_.nextStart()) {
@@ -238,12 +238,13 @@ nextIteration:
 
   escape:
     si_->freeState(previousState);
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now() - start);
+
     if (distanceFunc_(newMotion->state,
                       pdef_->getGoal()->as<base::GoalState>()->getState()) <=
         tolerance_) {
       // ===== Report Statistics and Construct Path =====
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
+
       std::cout << "total duration (microseconds): " << duration.count()
                 << endl;
       std::cout << "total number of iterations (attempted propagation steps): "
@@ -294,7 +295,7 @@ base::PlannerStatus ompl::geometric::HyRRT::constructPath(Motion *last_motion) {
     // Append all intermediate states to the path, including starting state,
     // excluding end vertex
     if (mpath[i]->edge != nullptr) { // A jump motion does not contain an edge
-      for (auto state : *mpath[i]->edge) {
+      for (auto state : *(mpath[i]->edge)) {
         path->append(
             state); // Need to make a new motion to append to trajectory matrix
         trajectoryMatrix_.push_back(state);
