@@ -83,17 +83,21 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
   while (!ptc()) {
   nextIteration:
     iterations++;
-    randomSample(randomMotion, gen); // Randomly sample a state from the planning space
+    randomSample(randomMotion,
+                 gen); // Randomly sample a state from the planning space
 
     auto *newMotion = new Motion(si_);
-    newMotion->parent = nn_->nearest(randomMotion); // Choose the nearest existing vertex in the tree to the randomly selected state
+    newMotion->parent =
+        nn_->nearest(randomMotion); // Choose the nearest existing vertex in the
+                                    // tree to the randomly selected state
 
     // Generate random maximum flow time
     double random = rand();
     double randomFlowTimeMax = random / RAND_MAX * tM_;
-    double tFlow = 0; // Tracking variable for the amount of flow time used in a given continuous simulation step
+    double tFlow = 0; // Tracking variable for the amount of flow time used in a
+                      // given continuous simulation step
 
-    bool collision = false;  // Set collision to false initially
+    bool collision = false; // Set collision to false initially
 
     // Choose whether to begin growing the tree in the flow or jump regime
     bool in_jump = jumpSet_(newMotion->state);
@@ -148,8 +152,7 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
         double tf = endPoint[TF_INDEX];
 
         // For telemetry only
-        auto collision_checking_start_time =
-            high_resolution_clock::now();
+        auto collision_checking_start_time = high_resolution_clock::now();
         collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf,
                                       intermediateState, TF_INDEX);
         auto collision_checking_end_time = high_resolution_clock::now();
@@ -172,20 +175,22 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
                 pdef_->getGoal()->as<base::GoalState>()->getState()) <=
             tolerance_;
 
-        // If maximum flow time has been reached, a collision has occured, or a solution has been found, exit the loop
+        // If maximum flow time has been reached, a collision has occured, or a
+        // solution has been found, exit the loop
         if (tFlow >= randomFlowTimeMax || collision || inGoalSet) {
           // Create motion to add to tree
           auto *motion = new Motion(si_);
           si_->copyState(motion->state, intermediateState);
           motion->parent = parentMotion;
-          motion->edge = intermediateStates;  // Set the new motion edge
+          motion->edge = intermediateStates; // Set the new motion edge
 
           if (inGoalSet) {
             newMotion->edge = intermediateStates;
           } else if (collision) {
             collisionParentMotion = motion;
             totalCollisions++;
-            priority = true;   // If collision has occurred, continue to jump regime
+            priority =
+                true; // If collision has occurred, continue to jump regime
           } else {
             nn_->add(motion);
           }
@@ -205,11 +210,13 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
           newState); // changed from previousState to newMotion->state
       newState->as<base::RealVectorStateSpace::StateType>()->values[TJ_INDEX]++;
 
-      // If generated state is in the unsafe set, then continue on to the next iteration
+      // If generated state is in the unsafe set, then continue on to the next
+      // iteration
       if (unsafeSet_(newState))
         goto nextIteration;
 
-      si_->copyState(newMotion->state, newState); // Set parent for next iteration
+      si_->copyState(newMotion->state,
+                     newState); // Set parent for next iteration
 
       // Create motion to add to tree
       auto *motion = new Motion(si_);
