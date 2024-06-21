@@ -13,7 +13,7 @@ A C++ hybrid rapidly-exploring random tree motion planner, compatible with OMPL 
 
 This repository provides the implementation of **HyRRT** in C++, compatible with OMPL and ROS 2 Humble. Vertices are implemented as the datatype [ompl::base::State *](https://ompl.kavrakilab.org/classompl_1_1base_1_1State.html) and edges as vectors of the same datatype. The theory analysis of HyRRT can be found at [N. Wang and R. G. Sanfelice](https://ieeexplore.ieee.org/document/9992444). Furthermore, we already provide a [MATLAB](https://github.com/HybridSystemsLab/hybridRRT) version, without compatibility with OMPL and ROS.
 
-**Your stars, forks and PRs are welcome!**
+**Your stars, forks and PRs are welcome!** If you do use this code, please cite the publication [N. Wang and R. G. Sanfelice](https://ieeexplore.ieee.org/document/9992444).
 
 ## Contents
 - [Quick Start](#0)
