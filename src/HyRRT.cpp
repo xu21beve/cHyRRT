@@ -91,8 +91,8 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
   // If it is, terminate planning
   int iterations = 0;
 
-nextIteration:
   while (!ptc()) {
+    nextIteration:
     iterations++;
     randomSample(randomMotion, gen);
 
@@ -110,74 +110,57 @@ nextIteration:
                         : in_jump; // If both are true, equal chance of being in
                                    // flow or jump set.
 
-    // ===== Sample and Instantiate Parent Vertex =====
-    base::State *previousState = si_->allocState();
+    // ===== Sample and Instantiate Parent Vertices and States in Edges =====
     auto *parentMotion = nn_->nearest(randomMotion);
+    base::State *previousState = si_->allocState();
     si_->copyState(previousState, parentMotion->state);
     auto *collisionParentMotion = nn_->nearest(randomMotion);
 
-    // ===== Instantiate Intermediate States and Edge =====
-    std::vector<std::vector<double>> *propStepStates =
-        new std::vector<std::vector<double>>;
-    pushBackState(propStepStates, previousState);
+    std::vector<base::State *> *intermediateStates = new std::vector<base::State *>;
 
-    // base::State *temp = si_->allocState();
-    std::vector<base::State *> *intermediateStates =
-        new std::vector<base::State *>;
-
-    base::State *temp = si_->allocState();
-    si_->copyState(temp, previousState);
-    intermediateStates->push_back(temp);
+    base::State *parentState = si_->allocState();
+    si_->copyState(parentState, previousState);
+    intermediateStates->push_back(parentState);
 
     // ===== Run Flow or Jump Propagation =====
-    switch (priority) {
-    case false: // Flow
+    if(!priority) { //Flow
       flowInputs = sampleFlowInputs_();
       while (tFlow < randomFlowTimeMax && flowSet_(newMotion->state)) {
-        // ===== Allocate and Add Intermediate State =====
-        // base::State *intermediateState = si_->allocState();
-        // si_->copyState(intermediateState, previousState);
-        // intermediateStates->push_back(intermediateState);
-
         tFlow += flowStepDuration_;
 
         // ===== Find New State with Flow Propagation =====
-        base::State *newState = si_->allocState();
-        newState = this->continuousSimulator_(flowInputs, previousState,
-                                              flowStepDuration_, newState);
-        newState->as<base::RealVectorStateSpace::StateType>()
+        base::State *intermediateState = si_->allocState();
+        intermediateState = this->continuousSimulator_(flowInputs, previousState, flowStepDuration_, intermediateState);
+        intermediateState->as<base::RealVectorStateSpace::StateType>()
             ->values[TF_INDEX] += flowStepDuration_;
 
-        if (unsafeSet_(newState))
+        // ===== Discard state if it is in the unsafe set =====
+        if (unsafeSet_(intermediateState))
           goto nextIteration;
 
-        // pushBackState(propStepStates, newState);
-        base::State *intermediateState = si_->allocState();
-        si_->copyState(intermediateState, newState);
+        // ===== Add Intermediate State to Edge =====
         intermediateStates->push_back(intermediateState);
 
+        // ===== Collision Checking =====
         std::vector<double> startPoint = stateToVector(parentMotion->state);
-        std::vector<double> endPoint = stateToVector(newState);
+        std::vector<double> endPoint = stateToVector(intermediateState);
 
         double ts = startPoint[TF_INDEX];
         double tf = endPoint[TF_INDEX];
 
-        si_->copyState(previousState, newState);
-
-        // ===== Collision Checking =====
         auto collision_checking_start_time =
             high_resolution_clock::now(); // for planner statistics only
-        // collision = collisionChecker_(propStepStates, jumpSet_, ts, tf,
-        //                               newState, TF_INDEX);
-        collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf, newState, TF_INDEX);
+        collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf, intermediateState, TF_INDEX);
         auto collision_checking_end_time = high_resolution_clock::now();
         totalCollisionTime +=
             duration_cast<microseconds>(collision_checking_end_time -
                                         collision_checking_start_time)
                 .count();
 
-        si_->copyState(newMotion->state,
-                       newState); // Set parent state for next iterations
+        // ===== State has passed all tests so update parent, edge, and temporary states =====
+        si_->copyState(newMotion->state, intermediateState); // Set parent state for next iterations
+        si_->copyState(previousState, intermediateState);
+
 
         // ===== Add Motion to Tree or Handle Collision/Goal =====
         bool inGoalSet =
@@ -188,31 +171,32 @@ nextIteration:
 
         if (tFlow >= randomFlowTimeMax || collision || inGoalSet) {
           auto *motion = new Motion(si_);
-          si_->copyState(motion->state, newState);
+          si_->copyState(motion->state, intermediateState);
           motion->parent = parentMotion;
 
-          si_->freeState(newState);
           collisionParentMotion = motion;
 
           motion->edge = intermediateStates;
 
           if (inGoalSet) {
             newMotion->edge = intermediateStates;
-            goto escape;
-          } else if (collision) {
+            break;
+          }
+          else if (collision)
+          {
             totalCollisions++;
-            goto jump;
-          } else {
+            priority = true;
+          }
+          else
+          {
             nn_->add(motion);
           }
           break;
         }
       }
-      break;
+    }
 
-    case true: // Jump
-      collisionParentMotion = parentMotion;
-    jump:
+    if(priority){ // Jump
       jumpInputs = sampleJumpInputs_();
       base::State *newState = si_->allocState();
       newState = this->discreteSimulator_(
@@ -232,12 +216,7 @@ nextIteration:
       nn_->add(motion);
       nn_->add(collisionParentMotion);
       si_->freeState(newState);
-
-      break;
     }
-
-  escape:
-    si_->freeState(previousState);
 
     if (distanceFunc_(newMotion->state,
                       pdef_->getGoal()->as<base::GoalState>()->getState()) <=
