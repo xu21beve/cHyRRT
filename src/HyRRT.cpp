@@ -37,8 +37,6 @@ void ompl::geometric::HyRRT::initTree(void) {
 
 void ompl::geometric::HyRRT::randomSample(Motion *randomMotion,
                                           std::mt19937 gen) {
-  // base::State *rstate = randomMotion->state;
-
   sampler_ = si_->allocStateSampler();
   // Replace later with the ompl sampler, for now leave as custom
   sampler_->sampleUniform(randomMotion->state);
@@ -49,7 +47,7 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
   // Start the timer for measuring the total duration
   auto start = high_resolution_clock::now();
 
-  // ===== Initialization =====
+  // Initialization
   // Make sure the planner is configured correctly
   // Ensures that there is at least one input state and a goal object specified
   checkValidity();
@@ -60,49 +58,44 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
 
   // Initialize variables for telemetry
   double totalCollisionTime = 0.0;
-  int totalCollisions = 0;
-  const unsigned int TF_INDEX = si_->getStateDimension() - 2; // Second to last column
+  int totalCollisions, iterations = 0;
+  const unsigned int TF_INDEX =
+      si_->getStateDimension() - 2; // Second to last column
   const unsigned int TJ_INDEX = si_->getStateDimension() - 1; // Last column
-
-  // Add start motions to the tree
-  while (const base::State *st = pis_.nextStart()) {
-    auto *motion = new Motion(si_);
-    si_->copyState(motion->state, st);
-    motion->root = motion->state; // This state is the root of a tree
-    nn_->add(motion);
-  }
-
-  initTree();
-
-  // ===== Random State Generation =====
-  // Create a random generator (by default, uniform)
-  std::random_device rd;
-  std::mt19937 gen(rd());
 
   // Vectors for storing flow and jump inputs
   std::vector<double> flowInputs;
   std::vector<double> jumpInputs;
 
+  initTree();
+
+  // Random State Generation
+  // Create a random generator (by default, uniform)
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
   // Allocate memory for a random motion
   auto *randomMotion = new Motion(si_);
 
-  // ===== Main Planning Loop =====
+  // Main Planning Loop
   // Periodically check if the termination condition is met
   // If it is, terminate planning
-  int iterations = 0;
-
   while (!ptc()) {
-    nextIteration:
+  nextIteration:
     iterations++;
-    randomSample(randomMotion, gen);
+    randomSample(randomMotion, gen); // Randomly sample a state from the planning space
 
     auto *newMotion = new Motion(si_);
-    newMotion->parent = nn_->nearest(randomMotion);
+    newMotion->parent = nn_->nearest(randomMotion); // Choose the nearest existing vertex in the tree to the randomly selected state
 
+    // Generate random maximum flow time
     double random = rand();
     double randomFlowTimeMax = random / RAND_MAX * tM_;
-    double tFlow = 0;
-    bool collision = false;
+    double tFlow = 0; // Tracking variable for the amount of flow time used in a given continuous simulation step
+
+    bool collision = false;  // Set collision to false initially
+
+    // Choose whether to begin growing the tree in the flow or jump regime
     bool in_jump = jumpSet_(newMotion->state);
     bool in_flow = flowSet_(newMotion->state);
     bool priority = in_jump && in_flow
@@ -110,85 +103,90 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
                         : in_jump; // If both are true, equal chance of being in
                                    // flow or jump set.
 
-    // ===== Sample and Instantiate Parent Vertices and States in Edges =====
+    // Sample and instantiate parent vertices and states in edges
     auto *parentMotion = nn_->nearest(randomMotion);
     base::State *previousState = si_->allocState();
     si_->copyState(previousState, parentMotion->state);
     auto *collisionParentMotion = nn_->nearest(randomMotion);
 
-    std::vector<base::State *> *intermediateStates = new std::vector<base::State *>;
+    // Allocate memory for the new edge
+    std::vector<base::State *> *intermediateStates =
+        new std::vector<base::State *>;
 
+    // Fill the edge with the starting vertex
     base::State *parentState = si_->allocState();
     si_->copyState(parentState, previousState);
     intermediateStates->push_back(parentState);
 
-    // ===== Run Flow or Jump Propagation =====
-    if(!priority) { //Flow
+    // Simulate in either the jump or flow regime
+    if (!priority) { // Flow
+      // Randomly sample the flow inputs
       flowInputs = sampleFlowInputs_();
+
       while (tFlow < randomFlowTimeMax && flowSet_(newMotion->state)) {
         tFlow += flowStepDuration_;
 
-        // ===== Find New State with Flow Propagation =====
+        // Find new state with continuous simulation
         base::State *intermediateState = si_->allocState();
-        intermediateState = this->continuousSimulator_(flowInputs, previousState, flowStepDuration_, intermediateState);
+        intermediateState = this->continuousSimulator_(
+            flowInputs, previousState, flowStepDuration_, intermediateState);
         intermediateState->as<base::RealVectorStateSpace::StateType>()
             ->values[TF_INDEX] += flowStepDuration_;
 
-        // ===== Discard state if it is in the unsafe set =====
+        // Discard state if it is in the unsafe set
         if (unsafeSet_(intermediateState))
           goto nextIteration;
 
-        // ===== Add Intermediate State to Edge =====
+        // Add new intermediate state to edge
         intermediateStates->push_back(intermediateState);
 
-        // ===== Collision Checking =====
+        // Collision Checking
         std::vector<double> startPoint = stateToVector(parentMotion->state);
         std::vector<double> endPoint = stateToVector(intermediateState);
 
         double ts = startPoint[TF_INDEX];
         double tf = endPoint[TF_INDEX];
 
+        // For telemetry only
         auto collision_checking_start_time =
-            high_resolution_clock::now(); // for planner statistics only
-        collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf, intermediateState, TF_INDEX);
+            high_resolution_clock::now();
+        collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf,
+                                      intermediateState, TF_INDEX);
         auto collision_checking_end_time = high_resolution_clock::now();
         totalCollisionTime +=
             duration_cast<microseconds>(collision_checking_end_time -
                                         collision_checking_start_time)
                 .count();
 
-        // ===== State has passed all tests so update parent, edge, and temporary states =====
-        si_->copyState(newMotion->state, intermediateState); // Set parent state for next iterations
+        // State has passed all tests so update parent, edge, and
+        // temporary states
+        si_->copyState(
+            newMotion->state,
+            intermediateState); // Set parent state for next iterations
         si_->copyState(previousState, intermediateState);
 
-
-        // ===== Add Motion to Tree or Handle Collision/Goal =====
+        // Add motion to tree or handle collision/goal
         bool inGoalSet =
             distanceFunc_(
                 newMotion->state,
                 pdef_->getGoal()->as<base::GoalState>()->getState()) <=
             tolerance_;
 
+        // If maximum flow time has been reached, a collision has occured, or a solution has been found, exit the loop
         if (tFlow >= randomFlowTimeMax || collision || inGoalSet) {
+          // Create motion to add to tree
           auto *motion = new Motion(si_);
           si_->copyState(motion->state, intermediateState);
           motion->parent = parentMotion;
-
-          collisionParentMotion = motion;
-
-          motion->edge = intermediateStates;
+          motion->edge = intermediateStates;  // Set the new motion edge
 
           if (inGoalSet) {
             newMotion->edge = intermediateStates;
-            break;
-          }
-          else if (collision)
-          {
+          } else if (collision) {
+            collisionParentMotion = motion;
             totalCollisions++;
-            priority = true;
-          }
-          else
-          {
+            priority = true;   // If collision has occurred, continue to jump regime
+          } else {
             nn_->add(motion);
           }
           break;
@@ -196,33 +194,41 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
       }
     }
 
-    if(priority){ // Jump
+    if (priority) { // Jump
+      // Randomly sample the jump inputs
       jumpInputs = sampleJumpInputs_();
+
+      // Instantiate and find new state with discrete simulator
       base::State *newState = si_->allocState();
       newState = this->discreteSimulator_(
           newMotion->state, jumpInputs,
           newState); // changed from previousState to newMotion->state
       newState->as<base::RealVectorStateSpace::StateType>()->values[TJ_INDEX]++;
 
+      // If generated state is in the unsafe set, then continue on to the next iteration
       if (unsafeSet_(newState))
         goto nextIteration;
 
-      si_->copyState(newMotion->state, newState);
+      si_->copyState(newMotion->state, newState); // Set parent for next iteration
 
+      // Create motion to add to tree
       auto *motion = new Motion(si_);
       si_->copyState(motion->state, newState);
       motion->parent = collisionParentMotion;
 
+      // Add motions to tree, and free up memory allocated to newState
       nn_->add(motion);
       nn_->add(collisionParentMotion);
       si_->freeState(newState);
     }
 
+    // If state is within goal set, report telemetry and construct path
     if (distanceFunc_(newMotion->state,
                       pdef_->getGoal()->as<base::GoalState>()->getState()) <=
         tolerance_) {
-      // ===== Report Statistics and Construct Path =====
-      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start);
+      // Report statistics and construct path
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::system_clock::now() - start);
 
       std::cout << "total duration (microseconds): " << duration.count()
                 << endl;
@@ -234,7 +240,7 @@ ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc) {
     }
   }
 
-  // ===== Path Generation Failed =====
+  // Path generation failed
   return base::PlannerStatus::INFEASIBLE; // If failed to find a path within the
                                           // specified max number of iterations,
                                           // then path generation has failed
