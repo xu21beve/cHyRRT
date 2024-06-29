@@ -40,11 +40,8 @@
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include "ompl/datastructures/NearestNeighbors.h"
 #include "ompl/geometric/planners/PlannerIncludes.h"
-#include <any>
-#include <ompl/base/GoalTypes.h>
-#include <ompl/base/Planner.h>
-#include <ompl/control/ODESolver.h>
-#include <ompl/tools/config/SelfConfig.h>
+#include "ompl/base/GoalTypes.h"
+#include "ompl/base/Planner.h"
 
 using namespace std;
 
@@ -84,8 +81,7 @@ namespace ompl
             void clear() override;
             void setup() override;
             void getPlannerData(base::PlannerData &data) const override;
-            base::PlannerStatus
-            solve(const base::PlannerTerminationCondition &ptc) override;
+            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
 
             // See ompl::RNG for more information about each distribution
             enum inputSamplingMethods_
@@ -109,7 +105,7 @@ namespace ompl
                 Motion() = default;
 
                 /// \brief Constructor that allocates memory for the state
-                Motion(const base::SpaceInformationPtr &si) : state(si->allocState()) {}
+                Motion(const base::SpaceInformationPtr &si) : state (si->allocState()) {}
 
                 ~Motion() = default;
 
@@ -123,15 +119,9 @@ namespace ompl
                 /// contained in.
                 const base::State *root{nullptr};
 
-                /// \brief The integration steps defining the edge of the motion
+                /// \brief The integration steps defining the edge of the motion, between the parent and child vertices
                 std::vector<base::State *> *edge{nullptr};
             };
-
-            /** \brief Get trajectory matrix from trajectoryMatrix_*/
-            std::vector<base::State *> getTrajectoryMatrix(void) const
-            {
-                return trajectoryMatrix_;
-            }
 
             /** \brief Free the memory allocated by this planner */
             void freeMemory();
@@ -141,15 +131,11 @@ namespace ompl
             {
                 int size = max.size() > min.size() ? max.size() : min.size();
                 if (min.size() != max.size())
-                {
                     throw Exception("Max input value (maxFlowInputValue) and min input value (minFlowInputValue) must be of the same size");
-                }
                 for (int i = 0; i < size; i++)
                 {
                     if (min.at(0) > max.at(0))
-                    {
                         throw Exception("Max input value must be greater than or equal to min input value");
-                    }
                 }
                 minFlowInputValue_ = min;
                 maxFlowInputValue_ = max;
@@ -160,15 +146,11 @@ namespace ompl
             {
                 int size = max.size() > min.size() ? max.size() : min.size();
                 if (min.size() != max.size())
-                {
                     throw Exception("Max input value (maxJumpInputValue_) and min input value (minJumpInputValue) must be of the same size");
-                }
                 for (int i = 0; i < size; i++)
                 {
                     if (min.at(i) > max.at(i))
-                    {
                         throw Exception("Max input value must be greater than or equal to min input value");
-                    }
                 }
                 minJumpInputValue_ = min;
                 maxJumpInputValue_ = max;
@@ -180,16 +162,12 @@ namespace ompl
             void setTm(double tM)
             {
                 if (tM <= 0)
-                {
                     throw Exception("Maximum flow time per propagation step must be greater than 0");
-                }
                 if (!flowStepDuration_)
                 {
                     if (tM < flowStepDuration_)
-                    {
                         throw Exception("Maximum flow time per propagation step must be greater than or equal to the length of time for each flow "
                                         "integration step (flowStepDuration_)");
-                    }
                 }
                 tM_ = tM;
             }
@@ -201,16 +179,11 @@ namespace ompl
             void setFlowStepDuration(double duration)
             {
                 if (duration <= 0)
-                {
                     throw Exception("Flow step length must be greater than 0");
-                }
                 if (!tM_)
                 {
                     if (tM_ < duration)
-                    {
-                        throw Exception(
-                            "Flow step length must be less than or equal to the maximum flow time per propagation step (Tm)");
-                    }
+                        throw Exception("Flow step length must be less than or equal to the maximum flow time per propagation step (Tm)");
                 }
                 flowStepDuration_ = duration;
             }
@@ -220,9 +193,7 @@ namespace ompl
             void setGoalTolerance(double tolerance)
             {
                 if (tolerance < 0)
-                {
                     throw Exception("Goal tolerance must be greater than or equal to 0");
-                }
                 tolerance_ = tolerance;
             }
 
@@ -264,7 +235,7 @@ namespace ompl
             }
 
             /** \brief Set the collision checker. */
-            void setCollisionChecker(std::function<bool(std::vector<base::State *> *propStepStates, std::function<bool(base::State *state)> obstacleSet, 
+            void setCollisionChecker(std::function<bool(std::vector<base::State *> *edge, std::function<bool(base::State *state)> obstacleSet, 
                                      double ts, double tf, base::State *newState, int tFIndex)> function)
             {
                 collisionChecker_ = function;
@@ -278,46 +249,32 @@ namespace ompl
             {
                 inputSamplingMethod_ = mode;
 
-                int targetParameterCount = 0;
+                unsigned int targetParameterCount = 0;
 
                 switch (mode)
                 {
                 case UNIFORM_INT:
                     targetParameterCount = 2;
-                    getRandFlowInput_ = [this](int i)
-                    {
-                        return randomSampler_->uniformInt(minFlowInputValue_[i], maxFlowInputValue_[i]);
-                    };
+                    getRandFlowInput_ = [this](int i) { return randomSampler_->uniformInt(minFlowInputValue_[i], maxFlowInputValue_[i]); };
                     break;
                 case GAUSSIAN_REAL:
                     targetParameterCount = 2;
-                    getRandFlowInput_ = [&](int i)
-                    {
-                        return randomSampler_->gaussian(inputs[0], inputs[1]);
-                    };
+                    getRandFlowInput_ = [&](int i) { return randomSampler_->gaussian(inputs[0], inputs[1]); };
                     break;
                 case HALF_NORMAL_REAL:
                     targetParameterCount = 2; // Can also be three, if want to specify focus,
                                               // which defaults to 3.0
-                    getRandFlowInput_ = [&](int i)
-                    {
-                        return randomSampler_->halfNormalReal(inputs[0], inputs[1], inputs[2]);
-                    };
+                    getRandFlowInput_ = [&](int i) { return randomSampler_->halfNormalReal(inputs[0], inputs[1], inputs[2]); };
                     break;
                 default:
                     targetParameterCount = 2;
-                    getRandFlowInput_ = [this](int i)
-                    {
-                        return randomSampler_->uniformReal(minFlowInputValue_[i], maxFlowInputValue_[i]);
-                    };
+                    getRandFlowInput_ = [this](int i) { return randomSampler_->uniformReal(minFlowInputValue_[i], maxFlowInputValue_[i]); };
                 }
 
                 if (inputs.size() == targetParameterCount || (mode == HALF_NORMAL_INT && targetParameterCount == 3))
                     inputSamplingParameters_ = inputs;
                 else
-                {
                     throw Exception("Invalid number of input parameters for input sampling mode.");
-                }
             }
 
             /** \brief Set the jump input sampling mode. See
@@ -328,46 +285,32 @@ namespace ompl
             {
                 inputSamplingMethod_ = mode;
 
-                int targetParameterCount = 0;
+                unsigned int targetParameterCount = 0;
 
                 switch (mode)
                 {
                 case UNIFORM_INT:
                     targetParameterCount = 2;
-                    getRandJumpInput_ = [this](int i)
-                    {
-                        return randomSampler_->uniformInt(minJumpInputValue_[i], maxJumpInputValue_[i]);
-                    };
+                    getRandJumpInput_ = [this](int i) { return randomSampler_->uniformInt(minJumpInputValue_[i], maxJumpInputValue_[i]); };
                     break;
                 case GAUSSIAN_REAL:
                     targetParameterCount = 2;
-                    getRandJumpInput_ = [&](int i)
-                    {
-                        return randomSampler_->gaussian(inputs[0], inputs[1]);
-                    };
+                    getRandJumpInput_ = [&](int i) { return randomSampler_->gaussian(inputs[0], inputs[1]); };
                     break;
                 case HALF_NORMAL_REAL:
-                    targetParameterCount = 2; // Can also be three, if want to specify focus,
+                    targetParameterCount = 2; // Can also be three parameters, if want to specify focus,
                                               // which defaults to 3.0
-                    getRandJumpInput_ = [&](int i)
-                    {
-                        return randomSampler_->halfNormalReal(inputs[0], inputs[1], inputs[2]);
-                    };
+                    getRandJumpInput_ = [&](int i) { return randomSampler_->halfNormalReal(inputs[0], inputs[1], inputs[2]); };
                     break;
                 default:
                     targetParameterCount = 2;
-                    getRandJumpInput_ = [this](int i)
-                    {
-                        return randomSampler_->uniformReal(minJumpInputValue_[i], maxJumpInputValue_[i]);
-                    };
+                    getRandJumpInput_ = [this](int i) { return randomSampler_->uniformReal(minJumpInputValue_[i], maxJumpInputValue_[i]); };
                 }
 
                 if (inputs.size() == targetParameterCount || (mode == HALF_NORMAL_INT && targetParameterCount == 3))
                     inputSamplingParameters_ = inputs;
                 else
-                {
                     throw Exception("Invalid number of input parameters for input sampling mode.");
-                }
             }
 
             /** \brief Set a different nearest neighbors datastructure */
@@ -382,85 +325,39 @@ namespace ompl
             }
 
             /** \brief Check if all required parameters have been set. */
-            void checkAllParametersSet(void) const
+            void checkMandatoryParametersSet(void) const
             {
                 if (!discreteSimulator_)
-                {
                     throw Exception("Jump map not set");
-                }
                 if (!continuousSimulator_)
-                {
                     throw Exception("Flow map not set");
-                }
                 if (!flowSet_)
-                {
                     throw Exception("Flow set not set");
-                }
                 if (!jumpSet_)
-                {
                     throw Exception("Jump set not set");
-                }
                 if (!unsafeSet_)
-                {
                     throw Exception("Unsafe set not set");
-                }
                 if (!tM_)
-                {
                     throw Exception("Max flow propagation time (Tm) no set");
-                }
                 if (maxJumpInputValue_.size() == 0)
-                {
                     throw Exception("Max input value (maxJumpInputValue) not set");
-                }
                 if (minJumpInputValue_.size() == 0)
-                {
                     throw Exception("Min input value (minJumpInputValue) not set");
-                }
                 if (maxFlowInputValue_.size() == 0)
-                {
                     throw Exception("Max input value (maxFlowInputValue) not set");
-                }
                 if (minFlowInputValue_.size() == 0)
-                {
                     throw Exception("Min input value (minFlowInputValue) not set");
-                }
                 if (!flowStepDuration_)
-                {
                     throw Exception("Flow step length (flowStepDuration_) not set");
-                }
-            }
-
-            /** \brief Convert states to vector form. */
-            std::vector<double> stateToVector(base::State *state)
-            {
-                std::vector<double> stateVector;
-                for (int i = 0; i < si_->getStateDimension(); i++)
-                {
-                    stateVector.push_back(state->as<base::RealVectorStateSpace::StateType>()->values[i]);
-                }
-                return stateVector;
             }
 
         protected:
-            /** \brief Add states to a tree with vertices represented by
-             * std::vector<double>. Used for collision checkers. */
-            void pushBackState(std::vector<std::vector<double>> *states_list, base::State *state)
-            {
-                base::RealVectorStateSpace::StateType *stateVec = state->as<base::RealVectorStateSpace::StateType>();
-                std::vector<double> newState;
-                for (int i = 0; i < si_->getStateDimension(); i++)
-                    newState.push_back(stateVec->values[i]);
-                states_list->push_back(newState);
-            }
-
             /** \brief Random sampler for the full vector of flow input. */
             std::function<std::vector<double>(void)> sampleFlowInputs_ = [this](void)
             {
                 std::vector<double> u;
-                for (int i = 0; i < maxFlowInputValue_.size(); i++)
-                {
+                for (unsigned int i = 0; i < maxFlowInputValue_.size(); i++)
                     u.push_back(getRandFlowInput_(i));
-                }
                 return u;
             };
 
@@ -468,43 +365,35 @@ namespace ompl
             std::function<std::vector<double>(void)> sampleJumpInputs_ = [this](void)
             {
                 std::vector<double> u;
-                for (int i = 0; i < maxJumpInputValue_.size(); i++)
-                {
+                for (unsigned int i = 0; i < maxJumpInputValue_.size(); i++)
                     u.push_back(getRandJumpInput_(i));
-                }
                 return u;
             };
 
             /** \brief Random sampler for one value of the flow input. */
-            std::function<double(int i)> getRandFlowInput_ = [this](int i)
-            {
-                return randomSampler_->uniformReal(minFlowInputValue_[i], maxFlowInputValue_[i]);
-            };
+            std::function<double(int i)> getRandFlowInput_ = [this](int i) { return randomSampler_->uniformReal(minFlowInputValue_[i], maxFlowInputValue_[i]); };
 
             /** \brief Random sampler for one value of the jump input. */
-            std::function<double(int i)> getRandJumpInput_ = [this](int i)
-            {
-                return randomSampler_->uniformReal(minJumpInputValue_[i], maxJumpInputValue_[i]);
-            };
+            std::function<double(int i)> getRandJumpInput_ = [this](int i) { return randomSampler_->uniformReal(minJumpInputValue_[i], maxJumpInputValue_[i]); };
 
             /** \brief Collision checker. Optional is point-by-point collision checking
              * using the jump set. */
-            std::function<bool(std::vector<base::State *> *propStepStates,
+            std::function<bool(std::vector<base::State *> *edge,
                                std::function<bool(base::State *state)> obstacleSet,
                                double ts, double tf, base::State *newState, int tFIndex)>
                 collisionChecker_ =
-                    [this](std::vector<base::State *> *propStepStates,
-                           std::function<bool(base::State *state)> obstacleSet, double ts,
-                           double tf, base::State *newState, int tFIndex) -> bool
+                    [this](std::vector<base::State *> *edge,
+                           std::function<bool(base::State *state)> obstacleSet, double t = -1.0,
+                           double tf = -1.0, base::State *newState, int tFIndex = -1) -> bool
             {
-                for (int i = 0; i < propStepStates->size(); i++)
+                for (unsigned int i = 0; i < edge->size(); i++)
                 {
-                    if (obstacleSet(propStepStates->at(i)))
+                    if (obstacleSet(edge->at(i)))
                     {
                         if (i == 0)
-                            si_->copyState(newState, propStepStates->at(i));
+                            si_->copyState(newState, edge->at(i));
                         else
-                            si_->copyState(newState, propStepStates->at(i - 1));
+                            si_->copyState(newState, edge->at(i - 1));
                         return true;
                     }
                 }
@@ -522,19 +411,15 @@ namespace ompl
             /** \brief Runs the initial setup tasks for the tree. */
             void initTree(void);
 
-            /** \brief Sample the random motion using a mt19937 random engine. */
-            void randomSample(Motion *randomMotion, std::mt19937 gen);
-
-            /** \brief Used to acquire the trajectory as a C++ vector, to be used for
-             * visualization and other purposes. */
-            std::vector<base::State *> trajectoryMatrix_{nullptr};
+            /** \brief Sample the random motion. */
+            void randomSample(Motion *randomMotion);
 
             /** \brief A nearest-neighbors datastructure containing the tree of motions */
             std::shared_ptr<NearestNeighbors<Motion *>> nn_;
 
             /**
              * The following are all customizeable parameters,
-             * and affect how the @b cHyRRT generates trajectories.
+             * and affect how @b cHyRRT generates trajectories.
              * Customize using setter functions above. */
 
             /** \brief Compute distance between states, default is Euclidean distance */
@@ -589,7 +474,7 @@ namespace ompl
             RNG *randomSampler_ = new RNG();
 
             /** \brief Construct the path, starting at the last edge. */
-            base::PlannerStatus constructPath(Motion *lastMotion);
+            base::PlannerStatus constructSolution(Motion *lastMotion);
 
             /** \brief Name of input sampling method, default is "uniform" */
             std::vector<double> inputSamplingParameters_{};

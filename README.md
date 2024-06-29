@@ -110,10 +110,12 @@ For more information about the project's customizeable parameters, please refer 
 
 | Required | Name | Description |
 |:----:|:----:|:----:|
-|Yes| maxInputValue_ | Vector of maximum input values (std::vector<double>)
-|Yes| minInputValue_ | Vector of minimum input values (std::vector<double>)
+|Yes| maxFlowInputValue_ | Vector of maximum input values for integration in the flow regime. (std::vector<double>)
+|Yes| minFlowInputValue_ | Vector of minimum input values for integration in the flow regime. (std::vector<double>)
+|Yes| maxJumpInputValue_ | Vector of maximum input values for integration in the jump regime. (std::vector<double>)
+|Yes| minJumpInputValue_ | Vector of minimum input values for integration in the jump regime. (std::vector<double>)
 |Yes| Tm_ | The maximum flow time for a given flow propagation step. (double)
-|Yes| flowStepLength_ | The flow time for a given integration step, within a flow propagation step. (double)
+|Yes| flowStepDuration_ | The flow time for a given integration step, within a flow propagation step. (double)
 |No| goalTolerance_ | The distance tolerance from the goal state for a state to be regarded as a valid final state. Default is .1 (double)
 |Yes| jumpSet_ | Function that returns true if a state is in the jump set, and false if not. (std::function<bool(ompl::base::State *)>)
 |Yes| flowSet_ | Function that returns true if a state is in the flow set, and false if not. (std::function<bool(ompl::base::State *)>)

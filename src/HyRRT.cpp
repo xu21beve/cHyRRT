@@ -1,12 +1,46 @@
-// Adapted from OMPL Planner template:
-// https://ompl.kavrakilab.org/newPlanner.html
+/*********************************************************************
+ * Software License Agreement (BSD License)
+ *
+ *  Copyright (c) 2024, University of Santa Cruz Hybrid Systems Laboratory
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   * Neither the name of the Willow Garage nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *********************************************************************/
+
+/* Author: Beverly Xu */
+
+#include <list>
 
 #include "../HyRRT.h"
 #include "ompl/base/Planner.h"
 #include "ompl/base/goals/GoalState.h"
 #include "ompl/base/spaces/RealVectorStateSpace.h"
 #include "ompl/tools/config/SelfConfig.h"
-#include <list>
 
 namespace base = ompl::base;
 namespace tools = ompl::tools;
@@ -38,7 +72,7 @@ void ompl::geometric::HyRRT::initTree(void)
     }
 }
 
-void ompl::geometric::HyRRT::randomSample(Motion *randomMotion, std::mt19937 gen)
+void ompl::geometric::HyRRT::randomSample(Motion *randomMotion)
 {
     sampler_ = si_->allocStateSampler();
     // Replace later with the ompl sampler, for now leave as custom
@@ -47,21 +81,12 @@ void ompl::geometric::HyRRT::randomSample(Motion *randomMotion, std::mt19937 gen
 
 base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTerminationCondition &ptc)
 {
-    // Start the timer for measuring the total duration
-    auto start = high_resolution_clock::now();
-
     // Initialization
     // Make sure the planner is configured correctly
     // Ensures that there is at least one input state and a goal object specified
     checkValidity();
-    checkAllParametersSet();
+    checkMandatoryParametersSet();
 
-    // Get the goal object
-    base::Goal *goal = pdef_->getGoal().get();
-
-    // Initialize variables for telemetry
-    double totalCollisionTime = 0.0;
-    int totalCollisions, iterations = 0;
     const unsigned int TF_INDEX = si_->getStateDimension() - 2; // Second to last column
     const unsigned int TJ_INDEX = si_->getStateDimension() - 1; // Last column
 
@@ -70,11 +95,6 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
     std::vector<double> jumpInputs;
 
     initTree();
-
-    // Random State Generation
-    // Create a random generator (by default, uniform)
-    std::random_device rd;
-    std::mt19937 gen(rd());
 
     // Allocate memory for a random motion
     auto *randomMotion = new Motion(si_);
@@ -85,8 +105,7 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
     while (!ptc())
     {
     nextIteration:
-        iterations++;
-        randomSample(randomMotion, gen); // Randomly sample a state from the planning space
+        randomSample(randomMotion); // Randomly sample a state from the planning space
 
         auto *newMotion = new Motion(si_);
         newMotion->parent = nn_->nearest(randomMotion); // Choose the nearest existing vertex in the tree to the randomly selected state
@@ -140,17 +159,11 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                 intermediateStates->push_back(intermediateState);
 
                 // Collision Checking
-                std::vector<double> startPoint = stateToVector(parentMotion->state);
-                std::vector<double> endPoint = stateToVector(intermediateState);
+                double ts = parentMotion->state->as<base::RealVectorStateSpace::StateType>()->values[TF_INDEX];
+                double tf = intermediateState->as<base::RealVectorStateSpace::StateType>()->values[TF_INDEX];
+                // double tf = tFlow;
 
-                double ts = startPoint[TF_INDEX];
-                double tf = endPoint[TF_INDEX];
-
-                // For telemetry only
-                auto collision_checking_start_time = high_resolution_clock::now();
                 collision = collisionChecker_(intermediateStates, jumpSet_, ts, tf, intermediateState, TF_INDEX);
-                auto collision_checking_end_time = high_resolution_clock::now();
-                totalCollisionTime += duration_cast<microseconds>(collision_checking_end_time - collision_checking_start_time).count();
 
                 // State has passed all tests so update parent, edge, and temporary states
                 si_->copyState(newMotion->state, intermediateState); // Set parent state for next iterations
@@ -173,7 +186,6 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
                     else if (collision)
                     {
                         collisionParentMotion = motion;
-                        totalCollisions++;
                         priority = true; // If collision has occurred, continue to jump regime
                     }
                     else
@@ -210,16 +222,16 @@ base::PlannerStatus ompl::geometric::HyRRT::solve(const base::PlannerTermination
             si_->freeState(newState);
         }
 
-        // If state is within goal set, report telemetry and construct path
+        // If state is within goal set, construct path
         if (distanceFunc_(newMotion->state, pdef_->getGoal()->as<base::GoalState>()->getState()) <= tolerance_)
-            return constructPath(newMotion);
+            return constructSolution(newMotion);
     }
 
     // Path generation failed
     return base::PlannerStatus::INFEASIBLE; // If failed to find a path within the specified max number of iterations, then path generation has failed
 }
 
-base::PlannerStatus ompl::geometric::HyRRT::constructPath(Motion *last_motion)
+base::PlannerStatus ompl::geometric::HyRRT::constructSolution(Motion *last_motion)
 {
     vector<Motion *> trajectory;
     nn_->list(trajectory);
@@ -236,13 +248,11 @@ base::PlannerStatus ompl::geometric::HyRRT::constructPath(Motion *last_motion)
         mpath.push_back(solution);
         if (solution->edge != nullptr)              // A jump motion does not contain an edge
             pathSize += solution->edge->size() + 1; // +1 for the end state
-
         solution = solution->parent;
     }
 
     // Create a new path object to store the solution path
     auto path(std::make_shared<PathGeometric>(si_));
-    trajectoryMatrix_ = {};
 
     // Reserve space for the path states
     path->getStates().reserve(pathSize);
@@ -257,15 +267,14 @@ base::PlannerStatus ompl::geometric::HyRRT::constructPath(Motion *last_motion)
             for (auto state : *(mpath[i]->edge))
             {
                 path->append(state); // Need to make a new motion to append to trajectory matrix
-                trajectoryMatrix_.push_back(state);
             }
         }
     }
-    path->append(mpath[0]->state); // append goal state to the path
-    trajectoryMatrix_.push_back(mpath[0]->state);
 
     // Add the solution path to the problem definition
     pdef_->addSolutionPath(path, finalDistance > 0.0, finalDistance, getName());
+     pdef_->getSolutionPath()->as<ompl::geometric::PathGeometric>()->printAsMatrix(
+      std::cout);
 
     // Return a status indicating that an exact solution has been found
     if (finalDistance > 0.0)
