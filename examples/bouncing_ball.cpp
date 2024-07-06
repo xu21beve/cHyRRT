@@ -8,7 +8,7 @@ double distanceFunc(ompl::base::State *state1, ompl::base::State *state2)
     return fabs(dist);
 }
 
-/** \brief Jump set is whenever the ball is on or below the surface and has a downwards velocity. */
+/** \brief Jump set is true whenever the ball is on or below the surface and has a downwards velocity. */
 bool jumpSet(ompl::base::State *state)
 {
     double velocity = state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
@@ -20,13 +20,13 @@ bool jumpSet(ompl::base::State *state)
         return false;
 }
 
-/** \brief Flow set is whenever the ball is above the surface or has an upwards velocity. */
+/** \brief Flow set is true whenever the ball is above the surface or has an upwards velocity. */
 bool flowSet(ompl::base::State *state)
 {
     return !jumpSet(state);
 }
 
-/** \brief Unsafe set is whenever the ball is above 10 units from the ground, to reduce time spent planning. */
+/** \brief Unsafe set is true whenever the ball is above 10 units from the ground, to reduce time spent planning. */
 bool unsafeSet(ompl::base::State *state)
 {
     if (state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] > 10)
