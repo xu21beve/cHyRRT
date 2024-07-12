@@ -88,8 +88,6 @@ This repository provides the implementation of **HyRRT** in C++, compatible with
     ```
      ./rosrun.bash
     ```
-    ***Include different version for different Operating Systems...***
-
 ## 1. <span id="1">Document
 
 The overall modifiable file structure is shown below.
